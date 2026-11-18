@@ -148,10 +148,25 @@ npx -w backend prisma migrate dev
 - `migrate dev` in ra `Your database is now in sync with your schema`.
 - Thư mục `backend/src/generated/prisma/` đã xuất hiện.
 - Trong phpMyAdmin, database `green_shopping` có các bảng (`user`, `role`, `user_role`, `address`, ...).
-Nếu có dữ liệu mẫu:
+Nạp dữ liệu mẫu (role, permission, 4 tài khoản mẫu — chạy lại nhiều lần không bị trùng):
  
 ```powershell
 npx -w backend prisma db seed
+```
+
+| Vai trò | Email | Mật khẩu | Trang sau đăng nhập |
+|---|---|---|---|
+| ADMIN | `admin@greenshopping.vn` | `Admin@123` | `/admin/dashboard` |
+| STAFF | `staff@greenshopping.vn` | `Staff@123` | `/admin/dashboard` |
+| SELLER | `seller@greenshopping.vn` | `Seller@123` | `/seller/dashboard` |
+| CUSTOMER | `customer@greenshopping.vn` | `Customer@123` | `/` |
+
+> Mật khẩu băm bằng SHA-256 + `PASSWORD_SALT` trong `backend/.env`. Đổi `PASSWORD_SALT` thì phải chạy lại seed.
+
+Chạy E2E test cho Auth (cần MySQL đang chạy và đã migrate):
+
+```powershell
+npm run test:e2e -w backend -- auth
 ```
  
 ---

@@ -1,0 +1,17 @@
+// =====================================================================
+// Miền Green Coins (Thành viên A)
+// Hiện mới khai báo GreenPointAccount (1-1 với User) — được tạo khi đăng ký.
+// Lưu ý: GreenReward và RewardRedemption ĐÃ BỊ LOẠI khỏi ERD, không khai báo lại.
+// =====================================================================
+
+model GreenPointAccount {
+  id        String   @id @default(uuid()) @map("account_id") @db.Char(36)
+  userId    String   @unique @map("user_id") @db.Char(36)
+  // BIGINT, ràng buộc balance >= 0 bằng CHECK constraint trong migration SQL
+  balance   BigInt   @default(0)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("green_point_account")
+}

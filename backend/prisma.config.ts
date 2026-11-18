@@ -9,7 +9,8 @@ export default defineConfig({
   migrations: {
     path: 'prisma/migrations',
     // `npx prisma db seed` sẽ chạy lệnh này
-    seed: 'ts-node prisma/seed.ts',
+    // Biên dịch bằng tsc rồi chạy bằng node: Prisma Client sinh ra dùng import '.js' mà ts-node không phân giải được
+    seed: 'npm run db:seed',
   },
   datasource: {
     url: env('DATABASE_URL'),

@@ -1,32 +1,63 @@
+# ===== Thư viện =====
 node_modules/
 
+# ===== Biến môi trường (chứa mật khẩu DB, JWT secret, PASSWORD_SALT) =====
 .env
 .env.*
 !.env.example
 
+# ===== Frontend (Next.js) =====
 frontend/.next/
 frontend/out/
+frontend/build/
 frontend/next-env.d.ts
+.vercel/
+
+# ===== Backend (NestJS + Prisma) =====
 backend/dist/
-*.tsbuildinfo
-
 backend/src/generated/
-
 backend/uploads/
 
-coverage/
+# ===== Build cache =====
+*.tsbuildinfo
+.eslintcache
+.turbo/
 
+# ===== Kiểm thử =====
+coverage/
+test-results/
+junit.xml
+
+# ===== Log =====
 logs/
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
+# ===== Khóa / chứng chỉ (không bao giờ commit) =====
+*.pem
+*.key
+*.p12
+
+# ===== Hệ điều hành =====
 .DS_Store
 Thumbs.db
 desktop.ini
 
+# ===== Editor / IDE =====
 .idea/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
 
+# ===== Claude Code =====
+# settings.json và .mcp.json dùng chung cho cả nhóm → CÓ commit
+# settings.local.json là cấu hình cá nhân → KHÔNG commit
+.claude/settings.local.json
+.claude/worktrees/
+
+# ===== File tạm của Office (báo cáo .docx đang mở) =====
 ~$*.docx
+~$*.xlsx
+~$*.pptx
