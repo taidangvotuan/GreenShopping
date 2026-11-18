@@ -1,0 +1,29 @@
+// =====================================================================
+// base.prisma — generator + datasource dùng chung cho mọi file *.prisma
+// Các model nằm ở file theo miền: auth-user.prisma, shop-product.prisma, ...
+// =====================================================================
+
+generator client {
+  provider     = "prisma-client"
+  // Đường dẫn tính từ file này (prisma/schema/) → backend/src/generated/prisma
+  output       = "../../src/generated/prisma"
+  // NestJS mặc định biên dịch ra CommonJS
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "mysql"
+  // Không khai báo url ở đây — Prisma 7 lấy từ prisma.config.ts
+}
+
+// ---------------------------------------------------------------------
+// QUY ƯỚC ÁNH XẠ KHỚP VỚI TỪ ĐIỂN DỮ LIỆU (Chương 3.4.3)
+// - Tên model PascalCase, tên bảng giữ như báo cáo bằng @@map
+// - Tên field camelCase, tên cột snake_case bằng @map
+// - Khóa chính CHAR(36):   String   @id @default(uuid()) @db.Char(36)
+// - Khóa ngoại CHAR(36):   String   @db.Char(36)
+// - TIMESTAMP tạo:         DateTime @default(now()) @db.Timestamp(0)
+// - TIMESTAMP cập nhật:    DateTime? @updatedAt @db.Timestamp(0)
+// - Tiền tệ / điểm số:     Decimal  @db.Decimal(12, 2)   (không dùng Float)
+// - Trạng thái:            enum Prisma → cột ENUM của MySQL
+// ---------------------------------------------------------------------

@@ -1,0 +1,50 @@
+# Môi trường phát triển Green Shopping: MySQL 8.4 + phpMyAdmin
+# Chạy:   docker compose up -d
+# Dừng:   docker compose down        (giữ dữ liệu)
+# Xóa DB: docker compose down -v     (xóa cả volume, mất dữ liệu)
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: green-shopping-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_dev_pw}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-green_shopping}
+      MYSQL_USER: ${MYSQL_USER:-green}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-green_dev_pw}
+      TZ: Asia/Ho_Chi_Minh
+    command:
+      # utf8mb4 để lưu tiếng Việt và emoji đầy đủ
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      # Lưu TIMESTAMP theo UTC, ứng dụng tự đổi múi giờ khi hiển thị
+      - --default-time-zone=+00:00
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Script chạy MỘT LẦN khi volume còn trống (cấp quyền cho shadow DB của Prisma)
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root_dev_pw}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: green-shopping-phpmyadmin
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      UPLOAD_LIMIT: 64M
+    ports:
+      - "3307:3306"
+
+volumes:
+  mysql_data:

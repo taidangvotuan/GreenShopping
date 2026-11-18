@@ -1,0 +1,45 @@
+{
+  "name": "greenshopping",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Green Shopping - Sàn thương mại điện tử sản phẩm xanh",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n FE,BE -c green,blue \"npm run dev -w frontend\" \"npm run start:dev -w backend\"",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test -w backend",
+    "gen:api": "npm run gen:api -w frontend",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/taidangvotuan/GreenShopping.git"
+  },
+  "bugs": {
+    "url": "https://github.com/taidangvotuan/GreenShopping/issues"
+  },
+  "homepage": "https://github.com/taidangvotuan/GreenShopping#readme",
+  "devDependencies": {
+    "concurrently": "^10.0.7",
+    "openapi-typescript": "^7.13.0",
+    "prettier": "^3.10.1"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^7.0.7",
+    "@tanstack/react-query": "^5.108.0",
+    "@tanstack/react-query-devtools": "^5.108.0",
+    "axios": "^1.21.1",
+    "clsx": "^2.1.1",
+    "jose": "^6.2.17",
+    "lucide-react": "^1.75.0",
+    "react-hook-form": "^7.92.0",
+    "recharts": "^3.11.0",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^3.7.0",
+    "zod": "^4.6.7"
+  }
+}

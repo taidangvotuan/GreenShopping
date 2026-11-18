@@ -1,0 +1,65 @@
+// =====================================================================
+// Miền 1 — Auth & User (Thành viên A)
+// Khớp Bảng 3.29 User, 3.30 Role, 3.31 UserRole, 3.32 Address
+// File mẫu để cả nhóm theo cùng quy ước khi viết các file miền khác.
+// =====================================================================
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  LOCKED
+  PENDING
+}
+
+model User {
+  id           String     @id @default(uuid()) @map("user_id") @db.Char(36)
+  fullName     String     @map("full_name") @db.VarChar(150)
+  email        String     @unique @db.VarChar(255)
+  passwordHash String     @map("password_hash") @db.VarChar(255)
+  phone        String?    @db.VarChar(20)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime?  @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  roles     UserRole[]
+  addresses Address[]
+
+  @@map("user")
+}
+
+// Role là BẢNG (theo Bảng 3.30), không phải enum — Admin có thể thêm mô tả.
+// Giá trị name được seed sẵn: CUSTOMER, SELLER, STAFF, ADMIN.
+model Role {
+  id          String  @id @default(uuid()) @map("role_id") @db.Char(36)
+  name        String  @unique @db.VarChar(30)
+  description String? @db.Text
+
+  users UserRole[]
+
+  @@map("role")
+}
+
+model UserRole {
+  userId     String   @map("user_id") @db.Char(36)
+  roleId     String   @map("role_id") @db.Char(36)
+  assignedAt DateTime @default(now()) @map("assigned_at") @db.Timestamp(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_role")
+}
+
+// TODO: bổ sung đủ cột theo Bảng 3.32 trong báo cáo
+model Address {
+  id        String   @id @default(uuid()) @map("address_id") @db.Char(36)
+  userId    String   @map("user_id") @db.Char(36)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("address")
+}
