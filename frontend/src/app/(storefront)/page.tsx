@@ -8,9 +8,10 @@ export default function HomePage() {
   const { user, isResolving } = useCurrentUser();
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-4 py-20 text-center">
+    <section className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-4 py-20 text-center">
       <h1 className="text-3xl font-bold text-primary-900">Green Shopping</h1>
       <p className="text-gray-600">Sàn thương mại điện tử dành cho sản phẩm xanh</p>
+      <Link href="/products" className="rounded-lg bg-primary-900 px-4 py-2 font-semibold text-white">Khám phá sản phẩm</Link>
       {isResolving ? null : user ? (
         <div className="flex items-center gap-3">
           <span className="text-sm">
@@ -28,6 +29,6 @@ export default function HomePage() {
           </Link>
         </div>
       )}
-    </main>
+    </section>
   );
 }

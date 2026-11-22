@@ -1,0 +1,118 @@
+model Cart {
+  id     String     @id @default(uuid()) @map("cart_id") @db.Char(36)
+  userId String     @unique @map("user_id") @db.Char(36)
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items  CartItem[]
+
+  @@map("cart")
+}
+
+model CartItem {
+  id        String @id @default(uuid()) @map("cart_item_id") @db.Char(36)
+  cartId    String @map("cart_id") @db.Char(36)
+  productId String @map("product_id") @db.Char(36)
+  quantity  Int
+  revision  Int    @default(1)
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([cartId, productId])
+  @@index([productId])
+  @@map("cart_item")
+}
+
+enum MasterOrderStatus {
+  AWAITING_PAYMENT
+  PROCESSING
+  SHIPPING
+  DELIVERY_ISSUE
+  COMPLETED
+  CANCELLED
+}
+
+enum SubOrderStatus {
+  AWAITING_PAYMENT
+  PROCESSING
+  READY
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  DELIVERY_FAILED
+  CANCELLED
+}
+
+model MasterOrder {
+  id              String            @id @default(uuid()) @map("master_order_id") @db.Char(36)
+  userId          String            @map("user_id") @db.Char(36)
+  requestId       String            @map("request_id") @db.Char(36)
+  requestHash     String            @map("request_hash") @db.Char(64)
+  status          MasterOrderStatus
+  recipientName   String            @map("recipient_name") @db.VarChar(150)
+  phone           String            @db.VarChar(20)
+  province        String            @db.VarChar(100)
+  ward            String            @db.VarChar(100)
+  addressLine     String            @map("address_line") @db.VarChar(255)
+  subtotal        Decimal           @db.Decimal(16, 0)
+  shippingFee     Decimal           @map("shipping_fee") @db.Decimal(16, 0)
+  voucherCode     String?           @map("voucher_code") @db.VarChar(32)
+  voucherDiscount Decimal           @map("voucher_discount") @db.Decimal(16, 0)
+  pointsUsed      Int               @map("points_used")
+  pointDiscount   Decimal           @map("point_discount") @db.Decimal(16, 0)
+  grandTotal      Decimal           @map("grand_total") @db.Decimal(16, 0)
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  subOrders SubOrder[]
+  payment   Payment?
+
+  @@unique([userId, requestId])
+  @@index([userId, createdAt])
+  @@map("master_order")
+}
+
+model SubOrder {
+  id              String         @id @default(uuid()) @map("sub_order_id") @db.Char(36)
+  masterOrderId   String         @map("master_order_id") @db.Char(36)
+  shopId          String         @map("shop_id") @db.Char(36)
+  shopName        String         @map("shop_name") @db.VarChar(150)
+  status          SubOrderStatus
+  ecoPackaging    Boolean        @default(false) @map("eco_packaging")
+  subtotal        Decimal        @db.Decimal(16, 0)
+  shippingFee     Decimal        @map("shipping_fee") @db.Decimal(16, 0)
+  voucherDiscount Decimal        @map("voucher_discount") @db.Decimal(16, 0)
+  pointDiscount   Decimal        @map("point_discount") @db.Decimal(16, 0)
+  grandTotal      Decimal        @map("grand_total") @db.Decimal(16, 0)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  masterOrder MasterOrder        @relation(fields: [masterOrderId], references: [id], onDelete: Restrict)
+  shop        Shop               @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  items       OrderItem[]
+  shipment    Shipment?
+  history     OrderStatusEvent[]
+
+  @@unique([masterOrderId, shopId])
+  @@index([shopId, status])
+  @@map("sub_order")
+}
+
+model OrderItem {
+  id                 String  @id @default(uuid()) @map("order_item_id") @db.Char(36)
+  subOrderId         String  @map("sub_order_id") @db.Char(36)
+  productId          String  @map("product_id") @db.Char(36)
+  productName        String  @map("product_name") @db.VarChar(150)
+  imageUrl           String? @map("image_url") @db.VarChar(500)
+  unitPrice          Decimal @map("unit_price") @db.Decimal(12, 0)
+  quantity           Int
+  sourceCartItemId   String? @map("source_cart_item_id") @db.Char(36)
+  sourceCartRevision Int?    @map("source_cart_revision")
+
+  subOrder SubOrder @relation(fields: [subOrderId], references: [id], onDelete: Restrict)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([subOrderId])
+  @@index([productId])
+  @@index([sourceCartItemId])
+  @@map("order_item")
+}

@@ -10,6 +10,9 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { ResponseTransformInterceptor } from './common/interceptors/response-transform.interceptor';
 import { AuthUserModule } from './modules/auth-user/auth-user.module';
+import { CartOrderModule } from './modules/cart-order/cart-order.module';
+import { PromotionModule } from './modules/promotion/promotion.module';
+import { ShipmentCarbonModule } from './modules/shipment-carbon/shipment-carbon.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -24,6 +27,9 @@ import { PrismaModule } from './prisma/prisma.module';
     }),
     PrismaModule,
     AuthUserModule,
+    CartOrderModule,
+    PromotionModule,
+    ShipmentCarbonModule,
   ],
   controllers: [AppController],
   providers: [

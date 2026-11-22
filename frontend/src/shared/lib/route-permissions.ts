@@ -24,6 +24,8 @@ export const PUBLIC_ROUTES = [
 
 /** Route yêu cầu đăng nhập; `roles` rỗng = mọi role đã đăng nhập. Khớp theo thứ tự. */
 export const PROTECTED_ROUTES: { pattern: string; roles: RoleName[] }[] = [
+  { pattern: '/admin/promotions', roles: ['ADMIN'] },
+  { pattern: '/admin/payments', roles: ['ADMIN'] },
   { pattern: '/admin/**', roles: ['ADMIN', 'STAFF'] },
   { pattern: '/seller/**', roles: ['SELLER', 'ADMIN'] },
   { pattern: '/cart', roles: [] },

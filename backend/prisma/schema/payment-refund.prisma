@@ -1,0 +1,40 @@
+enum PaymentMethod {
+  COD
+  MOCK
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  EXPIRED
+  CANCELLED
+}
+
+model Payment {
+  id            String        @id @default(uuid()) @map("payment_id") @db.Char(36)
+  masterOrderId String        @unique @map("master_order_id") @db.Char(36)
+  method        PaymentMethod
+  status        PaymentStatus
+  amount        Decimal       @db.Decimal(16, 0)
+  expiresAt     DateTime?     @map("expires_at") @db.Timestamp(3)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamp(3)
+  resolvedAt    DateTime?     @map("resolved_at") @db.Timestamp(3)
+
+  masterOrder MasterOrder    @relation(fields: [masterOrderId], references: [id], onDelete: Restrict)
+  events      PaymentEvent[]
+
+  @@index([status, expiresAt])
+  @@map("payment")
+}
+
+model PaymentEvent {
+  id        Int           @id @default(autoincrement()) @map("payment_event_id")
+  paymentId String        @map("payment_id") @db.Char(36)
+  status    PaymentStatus
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamp(3)
+  payment   Payment       @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@index([paymentId, id])
+  @@map("payment_event")
+}
