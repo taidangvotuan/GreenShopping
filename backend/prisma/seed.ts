@@ -4,7 +4,8 @@
  *
  * - 4 Role: CUSTOMER, SELLER, STAFF, ADMIN
  * - Permission cơ bản theo miền + gán RolePermission
- * - 4 tài khoản mẫu (kèm UserRole + GreenPointAccount balance = 0)
+ * - 4 tài khoản mẫu và số dư Điểm xanh để thử giảm giá
+ * - 2 cửa hàng, 3 sản phẩm và voucher GREEN50 để thử luồng mua hàng
  */
 import 'dotenv/config';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
@@ -186,10 +187,42 @@ async function main(): Promise<void> {
     await prisma.greenPointAccount.upsert({
       where: { userId: user.id },
       update: {},
-      create: { userId: user.id, balance: 0n },
+      create: { userId: user.id, balance: u.role === 'CUSTOMER' ? 1_240n : 0n },
     });
     console.log(`✔ ${u.role.padEnd(8)} ${u.email} / ${u.password}`);
   }
+  await seedShopping();
+}
+
+async function seedShopping() {
+  const seller = await prisma.user.findUniqueOrThrow({ where: { email: 'seller@greenshopping.vn' } });
+  const moc = '528688d8-031b-4a21-8158-0e18a4746bc9';
+  const tre = '5c25d5f2-d5dc-4f51-bd8c-391954fea1a5';
+  for (const shop of [{ id: moc, name: 'Mộc Living', shippingFee: 30_000 }, { id: tre, name: 'Tre Việt', shippingFee: 25_000 }]) {
+    await prisma.shop.upsert({ where: { id: shop.id }, create: { ...shop, ownerId: seller.id }, update: {} });
+  }
+  const products = [
+    { id: '1f6cf027-8a54-498a-89e9-f0fdc6e4b236', shopId: moc, name: 'Bình giữ nhiệt inox 500ml',
+      description: 'Bình inox dung tích 500ml, màu xanh sage. Phù hợp để mang theo khi đi làm, đi học hoặc đi chơi.',
+      price: 289_000, imageUrl: '/shopping/bottle.png',
+      imageGallery: ['/shopping/bottle-detail.png', '/shopping/bottle-side.png', '/shopping/bottle-cap.png'] },
+    { id: 'e7c62b9d-21db-4d9c-a473-5a44aeb51ff5', shopId: moc, name: 'Túi tote cotton hữu cơ',
+      description: 'Túi vải cotton màu tự nhiên, kích thước 38 × 42 cm, có thể dùng nhiều lần.',
+      price: 129_000, imageUrl: '/shopping/tote.png' },
+    { id: '72d87153-4370-442a-a2d1-7adcabeb1de0', shopId: tre, name: 'Bộ 4 bàn chải tre',
+      description: 'Bộ bốn bàn chải cán tre, lông mềm.',
+      price: 89_000, imageUrl: '/shopping/toothbrush.png' },
+  ];
+  for (const product of products) {
+    await prisma.product.upsert({ where: { id: product.id }, create: { ...product, stock: 50 }, update: {} });
+  }
+  await prisma.promotion.upsert({
+    where: { code: 'GREEN50' }, update: {},
+    create: {
+      code: 'GREEN50', name: 'Giảm 50.000 ₫ cho đơn từ 500.000 ₫', type: 'FIXED', value: 50_000,
+      minSubtotal: 500_000, startsAt: new Date('2026-01-01T00:00:00.000Z'), endsAt: new Date('2030-01-01T00:00:00.000Z'),
+    },
+  });
 }
 
 main()

@@ -22,6 +22,10 @@ model User {
   addresses         Address[]
   greenPointAccount GreenPointAccount?
   auditLogs         AuditLog[]
+  shops             Shop[]
+  cart              Cart?
+  orders            MasterOrder[]
+  orderStatusEvents OrderStatusEvent[]
 
   // Index thường (không UNIQUE theo ERD) để tra cứu nhanh khi đăng nhập bằng SĐT
   @@index([phone])

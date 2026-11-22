@@ -1,0 +1,24 @@
+model Shipment {
+  id           String   @id @default(uuid()) @map("shipment_id") @db.Char(36)
+  subOrderId   String   @unique @map("sub_order_id") @db.Char(36)
+  trackingCode String   @unique @map("tracking_code") @db.VarChar(40)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  subOrder     SubOrder @relation(fields: [subOrderId], references: [id], onDelete: Restrict)
+
+  @@map("shipment")
+}
+
+model OrderStatusEvent {
+  id          Int            @id @default(autoincrement()) @map("order_status_event_id")
+  subOrderId  String         @map("sub_order_id") @db.Char(36)
+  actorUserId String?        @map("actor_user_id") @db.Char(36)
+  status      SubOrderStatus
+  note        String?        @db.VarChar(500)
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamp(3)
+  subOrder    SubOrder       @relation(fields: [subOrderId], references: [id], onDelete: Restrict)
+  actor       User?          @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([subOrderId, id])
+  @@index([actorUserId])
+  @@map("order_status_event")
+}

@@ -46,6 +46,7 @@ Thumbs.db
 desktop.ini
 
 # ===== Editor / IDE =====
+.vs/
 .idea/
 .vscode/*
 !.vscode/extensions.json
