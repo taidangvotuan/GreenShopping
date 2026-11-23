@@ -12,18 +12,19 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
 }
 
+// Màu theo token Figma: bg-brand-primary #14532d (primary-900), border-default #d1d5db (gray-300)
 const variants: Record<Variant, string> = {
-  primary: 'bg-primary-600 text-white hover:bg-primary-700 focus-visible:ring-primary-500',
+  primary: 'bg-primary-900 text-white hover:bg-primary-800 focus-visible:ring-primary-500',
   outline:
-    'border border-primary-600 text-primary-700 bg-white hover:bg-primary-50 focus-visible:ring-primary-500',
-  ghost: 'text-primary-700 hover:bg-primary-50 focus-visible:ring-primary-500',
+    'border border-gray-300 text-primary-900 bg-white hover:bg-primary-50 focus-visible:ring-primary-500',
+  ghost: 'text-primary-900 hover:bg-primary-50 focus-visible:ring-primary-500',
   danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500',
 };
 
 const sizes: Record<Size, string> = {
   sm: 'h-8 px-3 text-sm',
-  md: 'h-10 px-4 text-sm',
-  lg: 'h-12 px-6 text-base',
+  md: 'h-11 px-4 text-sm', // cao bằng Input để thẳng hàng (ô voucher + nút Áp dụng)
+  lg: 'h-11 px-6 text-sm font-semibold',
 };
 
 export function Button({

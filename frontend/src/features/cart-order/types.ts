@@ -44,6 +44,10 @@ export interface Quote extends Totals {
   grandTotal: number;
   voucherCode: string | null;
   promotionError: string | null;
+  /** Mức tiền hàng tối thiểu của voucher đang nhập (null nếu không có voucher hợp lệ). */
+  promotionMinSubtotal: number | null;
+  /** Số tiền hàng còn thiếu để đủ điều kiện voucher (0 = đủ). */
+  promotionShortfall: number;
   pointsError: string | null;
   pointBalance: string;
   pointLimit: number;

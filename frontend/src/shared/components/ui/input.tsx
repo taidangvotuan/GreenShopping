@@ -24,9 +24,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   return (
     <div className="flex flex-col gap-1.5">
       {label && (
-        <label htmlFor={inputId} className="text-sm font-medium text-gray-700">
+        <label htmlFor={inputId} className="text-sm font-semibold text-gray-900">
           {label}
-          {required && <span className="ml-0.5 text-red-600">*</span>}
+          {required && <span className="ml-1">*</span>}
         </label>
       )}
       <div className="relative">
@@ -38,11 +38,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           aria-describedby={describedBy}
           required={required}
           className={cn(
-            'h-10 w-full rounded-lg border bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400',
+            'h-11 w-full rounded-lg border bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400',
             'transition-colors focus:outline-none focus:ring-2',
             error
-              ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
-              : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100',
+              ? 'border-red-500 bg-red-50/40 focus:border-red-500 focus:ring-red-200'
+              : 'border-gray-300 focus:border-primary-900 focus:ring-primary-100',
             isPassword && 'pr-10',
             className,
           )}
@@ -61,11 +61,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         )}
       </div>
       {error ? (
-        <p id={`${inputId}-error`} role="alert" className="text-xs text-red-600">
+        <p id={`${inputId}-error`} role="alert" className="text-xs font-medium text-red-700">
           {error}
         </p>
       ) : hint ? (
-        <p id={`${inputId}-hint`} className="text-xs text-gray-500">
+        <p id={`${inputId}-hint`} className="text-xs text-gray-600">
           {hint}
         </p>
       ) : null}

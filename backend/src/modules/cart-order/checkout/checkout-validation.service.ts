@@ -1,7 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { evaluatePromotion } from '../../promotion/promotions/promotions.service';
+import {
+  evaluatePromotion,
+  type PromotionEvaluation,
+} from '../../promotion/promotions/promotions.service';
 import { CartService, checkStock } from '../cart/cart.service';
 import { MAX_POINTS, MAX_TOTAL, type QuoteDto } from './dto/checkout.dto';
 import { splitDiscounts } from './order-split.service';
@@ -89,9 +92,10 @@ export class CheckoutValidationService {
     }
 
     const code = input.voucherCode?.toUpperCase();
-    const promo = code
+    // Tối đa 1 voucher / đơn: DTO chỉ nhận MỘT voucherCode (chuỗi), không nhận mảng.
+    const promo: PromotionEvaluation = code
       ? evaluatePromotion(await db.promotion.findUnique({ where: { code } }), subtotal, new Date())
-      : { code: null, discount: 0, error: null };
+      : { code: null, discount: 0, error: null, minSubtotal: null, shortfall: 0 };
     const account = await db.greenPointAccount.findUnique({
       where: { userId },
       select: { balance: true },
@@ -120,6 +124,8 @@ export class CheckoutValidationService {
       voucherCode: promo.code,
       voucherDiscount: promo.discount,
       promotionError: promo.error,
+      promotionMinSubtotal: promo.minSubtotal,
+      promotionShortfall: promo.shortfall,
       pointsError,
       pointsUsed,
       pointDiscount,

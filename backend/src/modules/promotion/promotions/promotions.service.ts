@@ -5,8 +5,33 @@ import type { CreatePromotionDto } from './dto/create-promotion.dto';
 
 const vnd = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
 
-export function evaluatePromotion(promotion: Promotion | null, subtotal: number, now: Date) {
-  const rejected = (error: string) => ({ code: null, discount: 0, error });
+export interface PromotionEvaluation {
+  code: string | null;
+  discount: number;
+  error: string | null;
+  /** Mức tiền hàng tối thiểu của voucher (chỉ có khi voucher tồn tại). */
+  minSubtotal: number | null;
+  /** Số tiền hàng còn thiếu để đủ điều kiện (0 nếu đã đủ). */
+  shortfall: number;
+}
+
+/**
+ * Điều kiện tối thiểu so trên TIỀN HÀNG (chưa gồm phí giao): `subtotal >= minSubtotal`.
+ * Ví dụ voucher đơn từ 500.000đ → 499.999đ bị từ chối, kèm số tiền còn thiếu.
+ */
+export function evaluatePromotion(
+  promotion: Promotion | null,
+  subtotal: number,
+  now: Date,
+): PromotionEvaluation {
+  const minSubtotal = promotion ? Number(promotion.minSubtotal) : null;
+  const rejected = (error: string, shortfall = 0) => ({
+    code: null,
+    discount: 0,
+    error,
+    minSubtotal,
+    shortfall,
+  });
   if (!promotion) return rejected('Không tìm thấy mã voucher.');
   if (!promotion.active) return rejected('Voucher đã ngừng áp dụng.');
   if (now < promotion.startsAt) return rejected('Voucher chưa đến thời gian áp dụng.');
@@ -15,7 +40,8 @@ export function evaluatePromotion(promotion: Promotion | null, subtotal: number,
   const minimum = Number(promotion.minSubtotal);
   if (subtotal < minimum) {
     return rejected(
-      `Voucher áp dụng cho tiền hàng từ ${vnd.format(minimum)}. Bạn còn thiếu ${vnd.format(minimum - subtotal)}.`,
+      `Voucher ${promotion.code} áp dụng cho tiền hàng từ ${vnd.format(minimum)}. Đơn hiện tại ${vnd.format(subtotal)}, còn thiếu ${vnd.format(minimum - subtotal)}.`,
+      minimum - subtotal,
     );
   }
   const value = Number(promotion.value);
@@ -25,6 +51,8 @@ export function evaluatePromotion(promotion: Promotion | null, subtotal: number,
     code: promotion.code,
     discount: Math.min(subtotal, discount, Number(promotion.maxDiscount ?? subtotal)),
     error: null,
+    minSubtotal,
+    shortfall: 0,
   };
 }
 
