@@ -7,11 +7,15 @@ import { ShopIcon } from '../../../shared/components/ui/shop-icon';
 import { orderApi, ordersKey } from '../services/order-api';
 import { dateTime, money, panel, primaryLink, Summary } from './checkout-summary';
 import {
+  OrderProgress,
   orderCode,
   orderLabels,
+  orderTone,
   paymentLabels,
+  paymentTone,
   ShipmentTimeline,
   shipmentLabels,
+  shipmentTone,
   StatusBadge,
 } from './order-status-timeline';
 
@@ -45,10 +49,7 @@ export function MasterOrderDetail({ id }: { id: string }) {
             <p className="text-sm font-medium text-primary-900">Đơn tổng</p>
             <h2 className="text-2xl font-bold">{orderCode(id)}</h2>
           </div>
-          <StatusBadge
-            label={orderLabels[data.status]}
-            tone={data.status === 'CANCELLED' || data.status === 'DELIVERY_ISSUE' ? 'red' : 'green'}
-          />
+          <StatusBadge label={orderLabels[data.status]} tone={orderTone[data.status]} />
         </div>
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-gray-700">
           <p>Đặt ngày {dateTime(data.createdAt)}</p>
@@ -56,6 +57,9 @@ export function MasterOrderDetail({ id }: { id: string }) {
             <ShopIcon name="truck" /> {delivered}/{data.subOrders.length} đơn con đã giao
           </p>
           <p>Cập nhật {dateTime(data.updatedAt)}</p>
+        </div>
+        <div className="mt-5">
+          <OrderProgress order={data} />
         </div>
       </section>
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
@@ -69,7 +73,7 @@ export function MasterOrderDetail({ id }: { id: string }) {
                 </div>
                 <StatusBadge
                   label={shipmentLabels[subOrder.status]}
-                  tone={subOrder.status === 'DELIVERY_FAILED' ? 'red' : 'neutral'}
+                  tone={shipmentTone[subOrder.status]}
                 />
               </header>
               <ul className="space-y-2 text-sm">
@@ -110,9 +114,16 @@ export function MasterOrderDetail({ id }: { id: string }) {
         </div>
         <aside className="space-y-4">
           <Summary title="Chi tiết thanh toán" totals={data} code={data.voucherCode}>
-            <p className="mb-3 text-sm text-gray-700">
-              {payment.method === 'COD' ? 'Thanh toán khi nhận hàng' : 'Thanh toán online mô phỏng'}{' '}
-              · {paymentLabels[payment.status]}
+            <p className="mb-3 flex flex-wrap items-center gap-2 text-sm text-gray-700">
+              {payment.method === 'COD' ? 'Thanh toán khi nhận hàng' : 'Thanh toán online mô phỏng'}
+              <StatusBadge
+                label={paymentLabels[payment.status]}
+                tone={
+                  payment.method === 'COD' && payment.status === 'PENDING'
+                    ? 'neutral'
+                    : paymentTone[payment.status]
+                }
+              />
             </p>
             {waiting && (
               <Link className={primaryLink} href={`/checkout/result?order=${id}`}>

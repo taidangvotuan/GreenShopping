@@ -68,9 +68,18 @@ export class ShipmentsService {
       async (db) => {
         // Concurrent updates for different shops of one order must roll up in sequence.
         await db.$queryRaw`SELECT master_order_id FROM master_order WHERE master_order_id = ${target.masterOrderId} FOR UPDATE`;
-        const order = await db.subOrder.findFirst({ where: { id, ...scope(user) } });
+        const order = await db.subOrder.findFirst({
+          where: { id, ...scope(user) },
+          include: { masterOrder: { select: { payment: { select: { method: true, status: true } } } } },
+        });
         if (!order || order.status === 'AWAITING_PAYMENT' || order.status === 'CANCELLED') {
           throw new NotFoundException('Không tìm thấy đơn con trong phạm vi quản lý.');
+        }
+        // Đồng bộ thanh toán ↔ vận chuyển (phòng thủ thêm ngoài FSM): đơn thanh toán online
+        // chỉ được giao khi giao dịch đã SUCCEEDED; PENDING/FAILED/EXPIRED/CANCELLED → không giao.
+        const payment = order.masterOrder.payment;
+        if (!payment || (payment.method === 'MOCK' && payment.status !== 'SUCCEEDED')) {
+          throw new ConflictException('Đơn chưa thanh toán thành công nên không thể giao hàng.');
         }
         if (order.status === input.status) return this.detail(db, id);
         if (order.status !== input.expectedStatus) {
