@@ -9,10 +9,12 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { Roles } from '../../../common/decorators/roles.decorator';
 import { OrdersService } from './orders.service';
 
 @ApiTags('Orders')
 @ApiBearerAuth()
+@Roles('CUSTOMER')
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly service: OrdersService) {}

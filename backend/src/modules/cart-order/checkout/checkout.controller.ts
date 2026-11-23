@@ -1,12 +1,14 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { Roles } from '../../../common/decorators/roles.decorator';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CheckoutService } from './checkout.service';
 import { CheckoutDto, QuoteDto } from './dto/checkout.dto';
 
 @ApiTags('Checkout')
 @ApiBearerAuth()
+@Roles('CUSTOMER')
 @Controller('checkout')
 export class CheckoutController {
   constructor(

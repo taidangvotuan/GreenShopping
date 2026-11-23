@@ -2,12 +2,15 @@ import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Public } from '../../../common/decorators/public.decorator';
+import { Roles } from '../../../common/decorators/roles.decorator';
 import { CartService } from './cart.service';
 import { AddCartItemDto } from './dto/add-cart-item.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 
+// Guest bị JwtAuthGuard chặn (401); role khác CUSTOMER bị RolesGuard chặn (403).
 @ApiTags('Cart')
 @ApiBearerAuth()
+@Roles('CUSTOMER')
 @Controller('cart')
 export class CartController {
   constructor(private readonly service: CartService) {}

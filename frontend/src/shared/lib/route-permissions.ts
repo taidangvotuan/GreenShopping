@@ -28,11 +28,16 @@ export const PROTECTED_ROUTES: { pattern: string; roles: RoleName[] }[] = [
   { pattern: '/admin/payments', roles: ['ADMIN'] },
   { pattern: '/admin/**', roles: ['ADMIN', 'STAFF'] },
   { pattern: '/seller/**', roles: ['SELLER', 'ADMIN'] },
-  { pattern: '/cart', roles: [] },
-  { pattern: '/checkout/**', roles: [] },
-  { pattern: '/orders/**', roles: [] },
+  // Mua hàng chỉ dành cho CUSTOMER — khớp @Roles('CUSTOMER') ở Cart/Checkout/Orders controller
+  { pattern: '/cart', roles: ['CUSTOMER'] },
+  { pattern: '/checkout/**', roles: ['CUSTOMER'] },
+  { pattern: '/orders/**', roles: ['CUSTOMER'] },
   { pattern: '/account/**', roles: [] },
 ];
+
+/** User có được mua hàng (giỏ hàng / mua ngay / thanh toán) không. */
+export const canPurchase = (roles: readonly string[] | undefined): boolean =>
+  !!roles?.includes('CUSTOMER');
 
 /** `/x/**` khớp `/x` và mọi `/x/...`; mẫu khác khớp chính xác. */
 export function matchRoute(pathname: string, pattern: string): boolean {
@@ -64,7 +69,10 @@ export function getPrimaryRole(roles: readonly string[]): RoleName | null {
   return ROLE_PRIORITY.find((r) => roles.includes(r)) ?? null;
 }
 
-/** Trang chủ theo role sau đăng nhập. */
+/**
+ * Màn hình đích sau đăng nhập theo role (Figma: Customer → Home, Seller/Staff/Admin → Dashboard riêng).
+ * STAFF dùng chung khung /admin (RoleGuard ADMIN|STAFF) nhưng trang tổng quan hiển thị bản Staff.
+ */
 export function getHomeForRoles(roles: readonly string[]): string {
   switch (getPrimaryRole(roles)) {
     case 'ADMIN':

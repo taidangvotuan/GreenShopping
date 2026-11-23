@@ -32,6 +32,7 @@ export class PaymentsController {
     return this.service.manage(Math.max(1, Math.min(100_000, page)), status);
   }
 
+  @Roles('CUSTOMER')
   @Post(':orderId/mock-result')
   mockResult(
     @CurrentUser('userId') userId: string,
