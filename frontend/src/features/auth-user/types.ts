@@ -22,12 +22,16 @@ export interface LoginResponse {
   user: AuthUser;
 }
 
-/** Body gửi lên POST /auth/register (không gồm confirmPassword). */
+/** Body gửi lên POST /auth/register (backend kiểm tra lại toàn bộ, kể cả confirmPassword & role). */
 export interface RegisterPayload {
   fullName: string;
-  email: string;
+  dateOfBirth: string;
   phone: string;
+  address: string;
+  email: string;
   password: string;
+  confirmPassword: string;
+  role: RoleName;
 }
 
 export interface LoginPayload {

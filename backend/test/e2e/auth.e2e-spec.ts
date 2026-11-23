@@ -32,10 +32,14 @@ describe('Auth & RBAC (e2e)', () => {
   const createdUserIds: string[] = [];
 
   const customer = {
-    fullName: '  Nguyễn Văn E2E  ',
-    email: nextEmail('customer'),
+    fullName: '  Nguyễn   Văn E2E  ',
+    dateOfBirth: '2000-01-31',
     phone: nextPhone(),
+    address: '  24 Nguyễn Hữu Cảnh,  TP. Hồ Chí Minh ',
+    email: nextEmail('customer'),
     password: STRONG_PASSWORD,
+    confirmPassword: STRONG_PASSWORD,
+    role: 'CUSTOMER',
   };
 
   beforeAll(async () => {
@@ -93,7 +97,7 @@ describe('Auth & RBAC (e2e)', () => {
       createdUserIds.push(user.userId);
 
       expect(user).toMatchObject({
-        fullName: 'Nguyễn Văn E2E', // đã trim
+        fullName: 'Nguyễn Văn E2E', // đã trim + gộp khoảng trắng giữa các từ
         email: customer.email,
         phone: customer.phone,
         status: 'ACTIVE',
@@ -144,21 +148,34 @@ describe('Auth & RBAC (e2e)', () => {
       ['thiếu chữ số', 'GreenShop@abc'],
       ['thiếu ký tự đặc biệt', 'GreenShop2026'],
       ['có khoảng trắng', 'Green Shop@2026'],
+      ['có khoảng trắng ở đầu', ' GreenShop@2026'],
     ])('400 — mật khẩu %s', async (_label, password) => {
       const res = await request(app.getHttpServer())
         .post('/api/auth/register')
-        .send({ ...customer, email: nextEmail('weak'), phone: nextPhone(), password })
+        .send({
+          ...customer,
+          email: nextEmail('weak'),
+          phone: nextPhone(),
+          password,
+          confirmPassword: password,
+        })
         .expect(400);
       expect(res.body.success).toBe(false);
       expect(res.body.errors.join(' ')).toMatch(/Mật khẩu/);
     });
 
-    it('400 — SĐT sai định dạng, email sai định dạng, họ tên rỗng', async () => {
+    it('400 — sai định dạng / rỗng / khoảng trắng / ngày sinh tương lai / mật khẩu xác nhận lệch', async () => {
       for (const patch of [
         { phone: '12345' },
         { phone: '091 234 5678' },
         { email: 'not-an-email' },
+        { email: 'a b@example.com' },
         { fullName: '   ' },
+        { address: '   ' },
+        { dateOfBirth: '2999-01-01' },
+        { dateOfBirth: '2001-02-30' },
+        { dateOfBirth: '' },
+        { confirmPassword: `${STRONG_PASSWORD}x` },
       ]) {
         await request(app.getHttpServer())
           .post('/api/auth/register')
@@ -167,11 +184,23 @@ describe('Auth & RBAC (e2e)', () => {
       }
     });
 
-    it('400 — không cho tự chọn role (forbidNonWhitelisted)', async () => {
-      await request(app.getHttpServer())
+    it.each(['SUPERADMIN', 'root', '', undefined])(
+      '400 — role ngoài whitelist bị từ chối (%s)',
+      async (role) => {
+        await request(app.getHttpServer())
+          .post('/api/auth/register')
+          .send({ ...customer, email: nextEmail('role'), phone: nextPhone(), role })
+          .expect(400);
+      },
+    );
+
+    it('201 — role thuộc whitelist được gán đúng (SELLER)', async () => {
+      const res = await request(app.getHttpServer())
         .post('/api/auth/register')
-        .send({ ...customer, email: nextEmail('role'), phone: nextPhone(), role: 'ADMIN' })
-        .expect(400);
+        .send({ ...customer, email: nextEmail('seller'), phone: nextPhone(), role: 'seller' })
+        .expect(201);
+      createdUserIds.push(res.body.data.userId);
+      expect(res.body.data.roles).toEqual(['SELLER']);
     });
   });
 

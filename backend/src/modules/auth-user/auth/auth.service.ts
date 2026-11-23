@@ -16,6 +16,7 @@ import {
   DEFAULT_ROLE,
   INVALID_CREDENTIALS_MESSAGE,
   normalizeVnPhone,
+  REGISTERABLE_ROLES,
   USER_STATUS,
 } from './auth.constants';
 import type { AuthUserDto, LoginResponseDto, LogoutResponseDto } from './dto/auth-response.dto';
@@ -71,11 +72,13 @@ export class AuthService {
       );
     }
 
+    // Role đã qua whitelist ở DTO (@IsIn REGISTERABLE_ROLES); kiểm tra lại phòng khi DTO bị bỏ qua.
+    const roleName = REGISTERABLE_ROLES.includes(dto.role) ? dto.role : DEFAULT_ROLE;
     // SECURITY: Chống SQL Injection bằng parameterized query
-    const customerRole = await this.prisma.role.findUnique({ where: { name: DEFAULT_ROLE } });
-    if (!customerRole) {
+    const role = await this.prisma.role.findUnique({ where: { name: roleName } });
+    if (!role) {
       // Thiếu dữ liệu seed — lỗi cấu hình hệ thống, không phải lỗi người dùng
-      throw new InternalServerErrorException('Hệ thống chưa khởi tạo vai trò CUSTOMER');
+      throw new InternalServerErrorException(`Hệ thống chưa khởi tạo vai trò ${roleName}`);
     }
 
     const passwordHash = hashPassword(dto.password, this.salt);
@@ -92,8 +95,20 @@ export class AuthService {
             phone,
             passwordHash,
             status: USER_STATUS.ACTIVE,
-            roles: { create: { roleId: customerRole.id } },
+            roles: { create: { roleId: role.id } },
             greenPointAccount: { create: { balance: 0n } },
+            // Địa chỉ đăng ký → địa chỉ mặc định. Bảng address tách tỉnh/phường nhưng form đăng ký
+            // chỉ có 1 ô địa chỉ → lưu toàn bộ vào address_line; tỉnh/phường bổ sung khi thanh toán.
+            addresses: {
+              create: {
+                recipientName: dto.fullName,
+                phone,
+                province: '',
+                ward: '',
+                addressLine: dto.address,
+                isDefault: true,
+              },
+            },
           },
           include: userWithAccessInclude,
         });
@@ -104,12 +119,23 @@ export class AuthService {
             action: AUDIT_ACTION.REGISTER,
             entityType: 'User',
             entityId: created.id,
-            newValue: { email, phone, fullName: dto.fullName, roles: [DEFAULT_ROLE] },
+            // FIXME(schema): bảng `user` chưa có cột date_of_birth → tạm lưu ngày sinh trong audit log.
+            // Cần migration bổ sung cột `user.date_of_birth DATE` rồi chuyển sang lưu ở bảng user.
+            newValue: {
+              email,
+              phone,
+              fullName: dto.fullName,
+              dateOfBirth: dto.dateOfBirth,
+              roles: [roleName],
+            },
             note: this.formatMeta(meta),
           },
         });
         return created;
       });
+
+      // TODO: Email verification hook
+      // (Giai đoạn sau: tạo token xác thực + gửi email kích hoạt cho `user.email` tại đây.)
 
       return this.toAuthUser(user);
     } catch (e) {
@@ -147,6 +173,9 @@ export class AuthService {
     if (user.status !== USER_STATUS.ACTIVE) {
       throw new ForbiddenException(this.statusMessage(user.status));
     }
+
+    // TODO: Email verification check hook
+    // (Giai đoạn sau: chặn đăng nhập nếu email chưa được xác thực.)
 
     const authUser = this.toAuthUser(user);
     const payload: JwtPayload = {

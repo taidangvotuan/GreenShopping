@@ -26,7 +26,7 @@ export class AuthController {
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ResponseMessage('Đăng ký tài khoản thành công')
-  @ApiOperation({ summary: 'Đăng ký tài khoản khách hàng (role CUSTOMER)' })
+  @ApiOperation({ summary: 'Đăng ký tài khoản (role thuộc whitelist CUSTOMER | SELLER | STAFF | ADMIN)' })
   @ApiBody({ type: RegisterDto })
   @ApiResponse({ status: 201, description: 'Tạo tài khoản thành công', type: AuthUserDto })
   @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
