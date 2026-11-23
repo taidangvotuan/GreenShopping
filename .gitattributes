@@ -1,0 +1,55 @@
+# =====================================================================
+# Chuẩn hóa xuống dòng cho cả repo (nhóm dùng cả Windows và macOS/Linux)
+# - Trong repo luôn lưu LF; khi checkout cũng dùng LF → Prettier/ESLint,
+#   Docker và shell script không bị lỗi do CRLF.
+# - Sau khi thêm file này, máy đã clone từ trước có thể chạy một lần:
+#     git add --renormalize .
+# =====================================================================
+* text=auto eol=lf
+
+# ----- Mã nguồn & cấu hình (khai báo rõ để Git không đoán sai) -----
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.js        text eol=lf
+*.mjs       text eol=lf
+*.cjs       text eol=lf
+*.json      text eol=lf
+*.css       text eol=lf
+*.md        text eol=lf
+*.prisma    text eol=lf
+*.sql       text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.puml      text eol=lf
+*.svg       text eol=lf
+.env.example text eol=lf
+Dockerfile  text eol=lf
+*.sh        text eol=lf
+
+# ----- Script chỉ chạy trên Windows cần CRLF -----
+*.ps1       text eol=crlf
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+
+# ----- File nhị phân: không đổi xuống dòng, không diff dạng text -----
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.webp      binary
+*.ico       binary
+*.pdf       binary
+*.woff      binary
+*.woff2     binary
+*.ttf       binary
+*.otf       binary
+*.zip       binary
+*.docx      binary
+*.xlsx      binary
+*.pptx      binary
+
+# ----- Lockfile: tự sinh, không hiển thị diff dài khi review -----
+package-lock.json  text eol=lf -diff linguist-generated=true
+
+# ----- Prisma Client sinh tự động (đã .gitignore; khai báo để GitHub không thống kê) -----
+backend/src/generated/** linguist-generated=true
