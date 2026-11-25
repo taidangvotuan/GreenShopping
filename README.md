@@ -6,7 +6,7 @@ Sàn thương mại điện tử dành cho sản phẩm xanh — monorepo **npm 
 |---|---|---|---|
 | `frontend/` | Next.js (App Router) + Tailwind CSS | `3000` | http://localhost:3000 |
 | `backend/` | NestJS + Prisma 7 | `3001` | http://localhost:3001/api — Swagger: http://localhost:3001/api/docs |
-| Docker | MySQL 8.4 + phpMyAdmin | `3307` / `8080` | http://localhost:8080 |
+| Docker | MySQL 8.4 + phpMyAdmin | `3307` / `8080` (đổi được qua `PMA_HOST_PORT`) | http://localhost:8080 |
 
 > Hướng dẫn cài đặt chi tiết và xử lý lỗi thường gặp: xem [SETUP.md](SETUP.md).
 > Mọi lệnh dưới đây chạy ở **thư mục gốc** của repo (PowerShell hoặc Git Bash đều được).
@@ -28,6 +28,13 @@ npx -w backend prisma generate               # sinh Prisma Client
 npx -w backend prisma migrate dev            # tạo bảng
 npx -w backend prisma db seed                # tạo role; thêm tài khoản mẫu khi SEED_DEMO=true (backend/.env)
 ```
+
+> **Lỗi `pool failed to retrieve a connection from pool` khi seed hoặc chạy backend:** tài khoản ứng dụng
+> `green_app` chưa được tạo. Script [docker/mysql/init/01-grant-dev.sql](docker/mysql/init/01-grant-dev.sql)
+> chỉ tự chạy khi volume MySQL còn trống, nên volume tạo từ trước sẽ thiếu tài khoản này. Chạy script thủ công
+> (giữ nguyên dữ liệu), dùng Git Bash:
+> `docker exec -i green-shopping-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD"' < docker/mysql/init/01-grant-dev.sql`
+> Hoặc xóa sạch DB rồi tạo lại: `docker compose down -v`, sau đó `npm run db:up`.
 
 Frontend mặc định gọi API tại `http://localhost:3001/api`. Muốn đổi, tạo `frontend/.env.local`:
 
