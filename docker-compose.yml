@@ -47,8 +47,9 @@ services:
       UPLOAD_LIMIT: 64M
     ports:
       # phpMyAdmin lắng nghe cổng 80 trong container → http://localhost:8080
+      # Nếu 8080 đã bị chiếm (XAMPP/Apache, Tomcat...), đặt PMA_HOST_PORT=8081 trong file .env ở gốc repo
       # SECURITY (VH-01): chỉ truy cập được từ chính máy chạy Docker
-      - "127.0.0.1:8080:80"
+      - "127.0.0.1:${PMA_HOST_PORT:-8080}:80"
 
 volumes:
   mysql_data:
