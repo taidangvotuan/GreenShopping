@@ -19,17 +19,6 @@ const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const MIN_BIRTH_DATE = '1900-01-01';
 const SIMPLE_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export const REGISTERABLE_ROLES = ['CUSTOMER', 'SELLER', 'STAFF', 'ADMIN'] as const;
-export const ROLE_OPTIONS: {
-  value: (typeof REGISTERABLE_ROLES)[number];
-  label: string;
-}[] = [
-  { value: 'CUSTOMER', label: 'Khách hàng' },
-  { value: 'SELLER', label: 'Người bán' },
-  { value: 'STAFF', label: 'Nhân viên' },
-  { value: 'ADMIN', label: 'Quản trị viên' },
-];
-
 const collapseSpaces = (v: string) => v.replace(/\s+/g, ' ');
 
 /** Ngày hiện tại theo giờ Việt Nam (YYYY-MM-DD) — giống backend todayInVietnam(). */
@@ -113,9 +102,7 @@ export const registerSchema = z
       .transform((v) => v.toLowerCase()),
     password: passwordField,
     confirmPassword: z.string().min(1, 'Vui lòng nhập lại mật khẩu'),
-    role: z.enum(REGISTERABLE_ROLES, {
-      message: 'Vui lòng chọn vai trò hợp lệ',
-    }),
+    // Không có trường vai trò: đăng ký công khai luôn là Khách hàng (backend gán CUSTOMER, gửi role → 400)
     // Chỉ ở giao diện (Figma): bắt buộc đồng ý quy định trước khi tạo tài khoản
     acceptTerms: z.boolean().refine((v) => v, 'Bạn cần đồng ý với quy định sử dụng'),
   })

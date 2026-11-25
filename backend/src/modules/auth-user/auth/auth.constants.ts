@@ -1,3 +1,5 @@
+import type { RoleName } from '../../../common/decorators/roles.decorator';
+
 /** Giá trị cột user.status (VARCHAR(30) theo ERD). */
 export const USER_STATUS = {
   ACTIVE: 'ACTIVE',
@@ -12,9 +14,14 @@ export const AUDIT_ACTION = {
   REGISTER: 'REGISTER',
   LOGIN: 'LOGIN',
   LOGOUT: 'LOGOUT',
+  ROLE_CHANGE: 'ROLE_CHANGE',
 } as const;
 
-export const DEFAULT_ROLE = 'CUSTOMER';
+/**
+ * SECURITY (BM-06): đăng ký công khai LUÔN chỉ cấp vai trò CUSTOMER — server không đọc vai trò từ
+ * client. Cấp SELLER/STAFF/ADMIN chỉ qua PATCH /users/:id/roles (ADMIN, có audit log).
+ */
+export const PUBLIC_REGISTRATION_ROLE = 'CUSTOMER' satisfies RoleName;
 
 /** Thông báo chung — KHÔNG tiết lộ email/SĐT có tồn tại hay không. */
 export const INVALID_CREDENTIALS_MESSAGE = 'Tên đăng nhập hoặc mật khẩu không đúng';
@@ -29,10 +36,6 @@ export const NO_WHITESPACE_REGEX = /^\S+$/;
 export const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 /** Ngày sinh sớm nhất được chấp nhận. */
 export const MIN_BIRTH_DATE = '1900-01-01';
-
-/** Vai trò được phép chọn khi đăng ký (whitelist — mọi giá trị khác bị từ chối 400). */
-export const REGISTERABLE_ROLES = ['CUSTOMER', 'SELLER', 'STAFF', 'ADMIN'] as const;
-export type RegisterableRole = (typeof REGISTERABLE_ROLES)[number];
 
 /** Chuẩn hóa SĐT về dạng 0xxxxxxxxx để lưu và so trùng nhất quán. */
 export function normalizeVnPhone(phone: string): string {

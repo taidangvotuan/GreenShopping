@@ -15,7 +15,7 @@ export class AuthUserDto {
 export class LoginResponseDto {
   @ApiProperty() access_token: string;
   @ApiProperty({ example: 'Bearer' }) token_type: string;
-  @ApiProperty({ example: '7d' }) expires_in: string;
+  @ApiProperty({ example: '30m' }) expires_in: string;
   @ApiProperty({ type: AuthUserDto }) user: AuthUserDto;
 }
 

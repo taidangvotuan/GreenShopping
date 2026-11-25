@@ -38,7 +38,10 @@ describe('Giỏ hàng, thanh toán và vận chuyển (e2e)', () => {
   let admin: string;
   let staff: string;
   let seller: string;
+  /** SELLER không sở hữu shop nào trong đơn: gọi API của CUSTOMER → 403 (sai vai trò). */
   let outsider: string;
+  /** CUSTOMER khác: đúng vai trò nhưng không sở hữu đơn → 404 (sai chủ sở hữu). */
+  let otherCustomer: string;
   let primaryProduct: string;
   let secondaryProduct: string;
 
@@ -58,7 +61,7 @@ describe('Giỏ hàng, thanh toán và vận chuyển (e2e)', () => {
       data: {
         email,
         fullName: `E2E ${role}`,
-        passwordHash: hashPassword(password, process.env.PASSWORD_SALT!),
+        passwordHash: await hashPassword(password),
         roles: { create: { roleId: entry.id } },
         greenPointAccount: { create: { balance: 500n } },
       },
@@ -81,6 +84,7 @@ describe('Giỏ hàng, thanh toán và vận chuyển (e2e)', () => {
     const owner = await createUser('SELLER');
     seller = owner.token;
     outsider = (await createUser('SELLER')).token;
+    otherCustomer = (await createUser('CUSTOMER')).token;
     for (const [name, price, shippingFee] of [
       ['A', 499_999, 20_000],
       ['B', 1, 10_000],
@@ -217,7 +221,9 @@ describe('Giỏ hàng, thanh toán và vận chuyển (e2e)', () => {
       );
       const cart = await api('get', '/cart', buyer.token).expect(200);
       expect(cart.body.data.map((row: { id: string }) => row.id)).toEqual(cartItemIds);
-      await api('get', `/orders/${id}`, outsider).expect(404);
+      // QA-03: RolesGuard chặn SELLER trước khi kiểm chủ sở hữu (403); CUSTOMER khác không thấy đơn (404)
+      await api('get', `/orders/${id}`, outsider).expect(403);
+      await api('get', `/orders/${id}`, otherCustomer).expect(404);
       await api('get', '/payments/manage', buyer.token).expect(403);
       const management = await api('get', `/payments/manage?status=${outcome}`, admin).expect(200);
       expect(management.body.data.items).toContainEqual(
@@ -243,7 +249,17 @@ describe('Giỏ hàng, thanh toán và vận chuyển (e2e)', () => {
       })
       .expect(201);
     const id = result.body.data.id;
+    // QA-03: xác nhận thanh toán trước giao — đơn online chưa thanh toán chưa thể chuyển mốc giao hàng
+    const pendingOrder = (await api('get', `/orders/${id}`, buyer.token).expect(200)).body.data;
+    expect(pendingOrder.status).toBe('AWAITING_PAYMENT');
+    await api('patch', `/shipments/${pendingOrder.subOrders[0].id}/status`, seller)
+      .send({ expectedStatus: 'PROCESSING', status: 'READY' })
+      .expect(404);
+    // QA-03: SELLER gọi API của CUSTOMER → 403; CUSTOMER khác trả kết quả cho đơn không phải của mình → 404
     await api('post', `/payments/${id}/mock-result`, outsider)
+      .send({ outcome: 'SUCCEEDED' })
+      .expect(403);
+    await api('post', `/payments/${id}/mock-result`, otherCustomer)
       .send({ outcome: 'SUCCEEDED' })
       .expect(404);
     const paid = await api('post', `/payments/${id}/mock-result`, buyer.token)
@@ -259,7 +275,7 @@ describe('Giỏ hàng, thanh toán và vận chuyển (e2e)', () => {
     expect(order.body.data.status).toBe('PROCESSING');
   });
 
-  it('tách đơn COD theo shop, lưu lịch sử và chỉ xác nhận COD khi giao đủ', async () => {
+  it('tách đơn COD theo shop, lưu lịch sử và chỉ chuyển COD sang chờ đối soát khi giao đủ', async () => {
     const buyer = await createUser('CUSTOMER');
     for (const productId of [primaryProduct, secondaryProduct]) {
       await api('post', '/cart/items', buyer.token).send({ productId, quantity: 1 }).expect(201);
@@ -302,7 +318,11 @@ describe('Giỏ hàng, thanh toán và vận chuyển (e2e)', () => {
     await move(staff, second.id, 'OUT_FOR_DELIVERY', 'DELIVERED').expect(200);
     const delivered = (await customerOrder()).body.data;
     expect(delivered.status).toBe('COMPLETED');
-    expect(delivered.payment.status).toBe('SUCCEEDED');
+    // NV-01: giao đủ không đồng nghĩa đã nhận tiền → chờ đối soát thủ công, chưa có resolvedAt
+    expect(delivered.payment).toMatchObject({
+      status: 'PENDING_MANUAL_RECONCILIATION',
+      resolvedAt: null,
+    });
     expect(
       delivered.subOrders.find((shop: { id: string }) => shop.id === second.id).history,
     ).toHaveLength(8);

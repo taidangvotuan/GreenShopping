@@ -26,7 +26,7 @@ cp backend/.env.example backend/.env         # PowerShell: Copy-Item backend\.en
 npm run db:up                                # bật MySQL :3307 + phpMyAdmin :8080 (đợi ~30s lần đầu)
 npx -w backend prisma generate               # sinh Prisma Client
 npx -w backend prisma migrate dev            # tạo bảng
-npx -w backend prisma db seed                # tạo role + tài khoản mẫu
+npx -w backend prisma db seed                # tạo role; thêm tài khoản mẫu khi SEED_DEMO=true (backend/.env)
 ```
 
 Frontend mặc định gọi API tại `http://localhost:3001/api`. Muốn đổi, tạo `frontend/.env.local`:
@@ -73,12 +73,13 @@ npm run start -w frontend            # phục vụ bản build ở cổng 3000
 |---|---|
 | `npm run typecheck -w frontend` | Kiểm tra kiểu TypeScript cho frontend |
 | `npm run lint -w backend` | Lint backend (oxlint) |
-| `npm test` | Unit test backend |
+| `npm test` / `npm run test:all` | Unit + E2E test backend (**E2E cần MySQL đang chạy**) |
+| `npm run test:unit` | Chỉ unit test backend (không cần MySQL) |
 | `npm run test:e2e -w backend` | E2E test backend (**cần MySQL đang chạy**) |
 | `npm run test:e2e -w backend -- auth` | Chỉ chạy E2E luồng đăng ký / đăng nhập |
 | `npm run gen:api` | Sinh lại kiểu API cho frontend từ Swagger (**cần backend đang chạy**) |
 
-## 6. Tài khoản mẫu (sau khi seed)
+## 6. Tài khoản mẫu (sau khi seed với `SEED_DEMO=true`, chỉ dùng trên máy phát triển)
 
 | Vai trò | Email | Mật khẩu | Màn hình sau đăng nhập |
 |---|---|---|---|

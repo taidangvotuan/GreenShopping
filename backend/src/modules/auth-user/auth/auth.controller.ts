@@ -11,6 +11,7 @@ import type { Request } from 'express';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Public } from '../../../common/decorators/public.decorator';
 import { ResponseMessage } from '../../../common/decorators/response-message.decorator';
+import type { AuthenticatedUser } from '../../../common/interfaces/authenticated-request.interface';
 import { AuthService, type RequestMeta } from './auth.service';
 import { AuthUserDto, LoginResponseDto, LogoutResponseDto } from './dto/auth-response.dto';
 import { LoginDto } from './dto/login.dto';
@@ -26,10 +27,12 @@ export class AuthController {
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ResponseMessage('Đăng ký tài khoản thành công')
-  @ApiOperation({ summary: 'Đăng ký tài khoản (role thuộc whitelist CUSTOMER | SELLER | STAFF | ADMIN)' })
+  @ApiOperation({
+    summary: 'Đăng ký tài khoản khách hàng (server luôn gán CUSTOMER; gửi kèm "role" → 400)',
+  })
   @ApiBody({ type: RegisterDto })
   @ApiResponse({ status: 201, description: 'Tạo tài khoản thành công', type: AuthUserDto })
-  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
+  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ hoặc có trường không được phép' })
   @ApiResponse({ status: 409, description: 'Email hoặc số điện thoại đã được sử dụng' })
   @ApiResponse({ status: 429, description: 'Gửi quá nhiều yêu cầu' })
   register(@Body() dto: RegisterDto, @Req() req: Request): Promise<AuthUserDto> {
@@ -56,14 +59,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ResponseMessage('Đăng xuất thành công')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Đăng xuất (ghi nhật ký; client tự xóa token)' })
+  @ApiOperation({ summary: 'Đăng xuất: thu hồi access token hiện tại (jti) và ghi nhật ký' })
   @ApiResponse({ status: 200, type: LogoutResponseDto })
-  @ApiResponse({ status: 401, description: 'Chưa đăng nhập hoặc token hết hạn' })
-  logout(
-    @CurrentUser('userId') userId: string,
-    @Req() req: Request,
-  ): Promise<LogoutResponseDto> {
-    return this.authService.logout(userId, this.meta(req));
+  @ApiResponse({ status: 401, description: 'Chưa đăng nhập, token hết hạn hoặc đã bị thu hồi' })
+  logout(@CurrentUser() user: AuthenticatedUser, @Req() req: Request): Promise<LogoutResponseDto> {
+    return this.authService.logout(user, this.meta(req));
   }
 
   @Get('me')

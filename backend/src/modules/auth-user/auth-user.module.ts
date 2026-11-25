@@ -8,6 +8,9 @@ import { JwtStrategy } from './auth/jwt.strategy';
 import { UsersController } from './users/users.controller';
 import { UsersService } from './users/users.service';
 
+/** Cú pháp thời hạn của thư viện ms, ví dụ "30m", "1h". */
+type TokenTtl = `${number}${'s' | 'm' | 'h' | 'd'}`;
+
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
@@ -17,8 +20,8 @@ import { UsersService } from './users/users.service';
         secret: config.getOrThrow<string>('JWT_ACCESS_SECRET'),
         signOptions: {
           algorithm: 'HS256',
-          // Chuỗi dạng "7d", "15m" (cú pháp của thư viện ms)
-          expiresIn: (config.get<string>('JWT_ACCESS_EXPIRES_IN') ?? '7d') as `${number}d`,
+          // BM-03: hạn ngắn, mặc định 30m (env.validation.ts kiểm tra cú pháp <số><s|m|h|d>)
+          expiresIn: config.getOrThrow<string>('JWT_ACCESS_EXPIRES_IN') as TokenTtl,
         },
       }),
     }),
