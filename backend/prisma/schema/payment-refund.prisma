@@ -9,6 +9,9 @@ enum PaymentStatus {
   FAILED
   EXPIRED
   CANCELLED
+  // NV-01: COD đã giao đủ nhưng CHƯA có nguồn ghi nhận thu tiền độc lập → chờ đối soát thủ công,
+  // không tự đánh dấu SUCCEEDED.
+  PENDING_MANUAL_RECONCILIATION
 }
 
 model Payment {

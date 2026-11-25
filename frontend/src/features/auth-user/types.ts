@@ -22,7 +22,10 @@ export interface LoginResponse {
   user: AuthUser;
 }
 
-/** Body gửi lên POST /auth/register (backend kiểm tra lại toàn bộ, kể cả confirmPassword & role). */
+/**
+ * Body gửi lên POST /auth/register (backend kiểm tra lại toàn bộ, kể cả confirmPassword).
+ * Không có `role`: tài khoản đăng ký công khai luôn là CUSTOMER; backend từ chối (400) nếu gửi kèm role.
+ */
 export interface RegisterPayload {
   fullName: string;
   dateOfBirth: string;
@@ -31,7 +34,6 @@ export interface RegisterPayload {
   email: string;
   password: string;
   confirmPassword: string;
-  role: RoleName;
 }
 
 export interface LoginPayload {

@@ -6,19 +6,46 @@
  * Test tự tạo dữ liệu với email/SĐT ngẫu nhiên và tự dọn sau khi chạy,
  * không phụ thuộc dữ liệu seed tài khoản mẫu.
  */
+import { randomUUID } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from '../../src/app.module';
 import { setupApp } from '../../src/common/config/app-setup';
-import { hashPassword } from '../../src/common/utils/password.util';
+import {
+  hashLegacyPassword,
+  hashPassword,
+  isBcryptHash,
+} from '../../src/common/utils/password.util';
 import { PrismaService } from '../../src/prisma/prisma.service';
 
 process.env.NODE_ENV = 'test';
 
 const RUN = Date.now().toString().slice(-6);
 const STRONG_PASSWORD = 'GreenShop@2026';
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** "30m" → 1800 — cú pháp <số><s|m|h|d> mà env.validation.ts cho phép. */
+function ttlSeconds(ttl: string): number {
+  const unit = { s: 1, m: 60, h: 3600, d: 86_400 }[ttl.slice(-1) as 's' | 'm' | 'h' | 'd'];
+  return Number(ttl.slice(0, -1)) * unit;
+}
+
+interface AccessTokenClaims {
+  sub: string;
+  jti: string;
+  iat: number;
+  exp: number;
+  roles: string[];
+  permissions: string[];
+}
+
+/** Giải mã phần payload của JWT (không xác minh chữ ký — chỉ để đọc claim trong test). */
+function decodeJwt(token: string): AccessTokenClaims {
+  return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+}
 
 /** SĐT = "09" + 6 số theo lần chạy + 2 số thứ tự → đúng 10 chữ số, không trùng. */
 let phoneSeq = 0;
@@ -39,7 +66,6 @@ describe('Auth & RBAC (e2e)', () => {
     email: nextEmail('customer'),
     password: STRONG_PASSWORD,
     confirmPassword: STRONG_PASSWORD,
-    role: 'CUSTOMER',
   };
 
   beforeAll(async () => {
@@ -63,15 +89,15 @@ describe('Auth & RBAC (e2e)', () => {
     await app?.close();
   });
 
-  /** Tạo trực tiếp user có role/status tùy ý để test RBAC và trạng thái tài khoản. */
-  async function createUserDirect(role: string, status = 'ACTIVE') {
+  /** Tạo trực tiếp user có role/status/hash tùy ý để test RBAC, trạng thái tài khoản và hash cũ. */
+  async function createUserDirect(role: string, status = 'ACTIVE', passwordHash?: string) {
     const roleRow = await prisma.role.findUniqueOrThrow({ where: { name: role } });
     const user = await prisma.user.create({
       data: {
         fullName: `E2E ${role}`,
         email: nextEmail(role.toLowerCase()),
         phone: nextPhone(),
-        passwordHash: hashPassword(STRONG_PASSWORD, process.env.PASSWORD_SALT!),
+        passwordHash: passwordHash ?? (await hashPassword(STRONG_PASSWORD)),
         status,
         roles: { create: { roleId: roleRow.id } },
         greenPointAccount: { create: {} },
@@ -112,7 +138,7 @@ describe('Auth & RBAC (e2e)', () => {
       expect(db.roles.map((r) => r.role.name)).toEqual(['CUSTOMER']);
       expect(db.greenPointAccount?.balance).toBe(0n);
       expect(db.passwordHash).not.toBe(customer.password);
-      expect(db.passwordHash).toHaveLength(64); // SHA-256 hex
+      expect(isBcryptHash(db.passwordHash)).toBe(true); // BM-02: bcrypt, không còn SHA-256
 
       const audit = await prisma.auditLog.findFirst({
         where: { entityId: user.userId, action: 'REGISTER', entityType: 'User' },
@@ -121,10 +147,11 @@ describe('Auth & RBAC (e2e)', () => {
     });
 
     it('409 — trùng email', async () => {
-      await request(app.getHttpServer())
+      const res = await request(app.getHttpServer())
         .post('/api/auth/register')
         .send({ ...customer, phone: nextPhone() })
         .expect(409);
+      expect(res.body.message).toBe('Email đã được sử dụng');
     });
 
     it('409 — trùng email khác hoa/thường', async () => {
@@ -135,10 +162,31 @@ describe('Auth & RBAC (e2e)', () => {
     });
 
     it('409 — trùng số điện thoại (kể cả dạng +84)', async () => {
-      await request(app.getHttpServer())
+      const res = await request(app.getHttpServer())
         .post('/api/auth/register')
         .send({ ...customer, email: nextEmail('dup'), phone: `+84${customer.phone.slice(1)}` })
         .expect(409);
+      expect(res.body.message).toBe('Số điện thoại đã được sử dụng');
+    });
+
+    it('DL-01: 2 đăng ký đồng thời cùng SĐT → đúng một 201 và một 409 "Số điện thoại đã được sử dụng"', async () => {
+      const phone = nextPhone();
+      const responses = await Promise.all(
+        ['race-a', 'race-b'].map((tag) =>
+          request(app.getHttpServer())
+            .post('/api/auth/register')
+            .send({ ...customer, email: nextEmail(tag), phone }),
+        ),
+      );
+      for (const res of responses) {
+        if (res.status === 201) createdUserIds.push(res.body.data.userId);
+      }
+
+      expect(responses.map((res) => res.status).sort((a, b) => a - b)).toEqual([201, 409]);
+      expect(responses.find((res) => res.status === 409)?.body.message).toBe(
+        'Số điện thoại đã được sử dụng',
+      );
+      await expect(prisma.user.count({ where: { phone } })).resolves.toBe(1);
     });
 
     it.each([
@@ -184,23 +232,33 @@ describe('Auth & RBAC (e2e)', () => {
       }
     });
 
-    it.each(['SUPERADMIN', 'root', '', undefined])(
-      '400 — role ngoài whitelist bị từ chối (%s)',
+    // BM-06 — hồi quy: đăng ký công khai không bao giờ tự cấp được quyền vận hành/quản trị
+    it.each(['ADMIN', 'STAFF', 'SELLER', 'CUSTOMER', 'admin'])(
+      'BM-06: 400 — gửi kèm role=%s bị từ chối (forbidNonWhitelisted), không tạo tài khoản',
       async (role) => {
-        await request(app.getHttpServer())
+        const email = nextEmail('role');
+        const res = await request(app.getHttpServer())
           .post('/api/auth/register')
-          .send({ ...customer, email: nextEmail('role'), phone: nextPhone(), role })
+          .send({ ...customer, email, phone: nextPhone(), role })
           .expect(400);
+        expect(res.body.errors.join(' ')).toMatch(/role should not exist/);
+        await expect(prisma.user.findUnique({ where: { email } })).resolves.toBeNull();
       },
     );
 
-    it('201 — role thuộc whitelist được gán đúng (SELLER)', async () => {
+    it('BM-06: 201 — đăng ký công khai luôn chỉ cấp CUSTOMER (kiểm cả CSDL)', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/auth/register')
-        .send({ ...customer, email: nextEmail('seller'), phone: nextPhone(), role: 'seller' })
+        .send({ ...customer, email: nextEmail('public'), phone: nextPhone() })
         .expect(201);
       createdUserIds.push(res.body.data.userId);
-      expect(res.body.data.roles).toEqual(['SELLER']);
+
+      expect(res.body.data.roles).toEqual(['CUSTOMER']);
+      const roles = await prisma.userRole.findMany({
+        where: { userId: res.body.data.userId },
+        include: { role: true },
+      });
+      expect(roles.map((row) => row.role.name)).toEqual(['CUSTOMER']);
     });
   });
 
@@ -212,11 +270,15 @@ describe('Auth & RBAC (e2e)', () => {
       expect(typeof access_token).toBe('string');
       expect(access_token.split('.')).toHaveLength(3);
 
-      const payload = JSON.parse(Buffer.from(access_token.split('.')[1], 'base64url').toString());
+      const payload = decodeJwt(access_token);
       expect(payload.sub).toBe(user.userId);
+      expect(payload.jti).toMatch(UUID_REGEX); // BM-03: định danh phiên để thu hồi
       expect(payload.roles).toEqual(['CUSTOMER']);
       expect(Array.isArray(payload.permissions)).toBe(true);
-      expect(payload.exp - payload.iat).toBe(7 * 24 * 3600);
+      // BM-03: hạn theo JWT_ACCESS_EXPIRES_IN (mặc định 30m), không còn cố định 7 ngày
+      const ttl = app.get(ConfigService).getOrThrow<string>('JWT_ACCESS_EXPIRES_IN');
+      expect(payload.exp - payload.iat).toBe(ttlSeconds(ttl));
+      expect(res.body.data.expires_in).toBe(ttl);
       expect(JSON.stringify(res.body)).not.toMatch(/password/i);
 
       const audit = await prisma.auditLog.findFirst({
@@ -239,17 +301,45 @@ describe('Auth & RBAC (e2e)', () => {
       expect(res.body.message).toBe('Tên đăng nhập hoặc mật khẩu không đúng');
     });
 
+    // QA-03: định danh chứa khoảng trắng bị LoginDto từ chối ở tầng validation (400) trước khi tới CSDL
     it.each([
       ["' OR '1'='1", 'anything'],
       ["admin@greenshopping.vn' --", 'anything'],
       ["' OR 1=1; DROP TABLE user; --", 'x'],
+    ])('400 — payload SQL Injection có khoảng trắng bị DTO chặn: %s', async (identifier, password) => {
+      const res = await login(identifier, password);
+      expect(res.status).toBe(400);
+      expect(res.body.data).toBeUndefined();
+      expect(res.body.errors.join(' ')).toMatch(/khoảng trắng/);
+      // Bảng user vẫn còn nguyên
+      await expect(prisma.user.count()).resolves.toBeGreaterThan(0);
+    });
+
+    // Không có khoảng trắng → qua DTO, tới CSDL dưới dạng GIÁ TRỊ tham số → chỉ là sai thông tin (401)
+    it.each([
+      ["'OR'1'='1", 'anything'],
+      ["admin@greenshopping.vn'--", 'anything'],
       [customer.email, "'OR'1'='1"],
-    ])('401 — payload SQL Injection bị vô hiệu: %s', async (identifier, password) => {
+    ])('401 — payload SQL Injection không khoảng trắng bị vô hiệu: %s', async (identifier, password) => {
       const res = await login(identifier, password);
       expect(res.status).toBe(401);
       expect(res.body.data).toBeUndefined();
-      // Bảng user vẫn còn nguyên
+      expect(res.body.message).toBe('Tên đăng nhập hoặc mật khẩu không đúng');
       await expect(prisma.user.count()).resolves.toBeGreaterThan(0);
+    });
+
+    it('BM-02: tài khoản còn hash SHA-256 cũ đăng nhập được và được nâng cấp sang bcrypt', async () => {
+      const legacyHash = hashLegacyPassword(STRONG_PASSWORD, process.env.PASSWORD_SALT!);
+      const legacy = await createUserDirect('CUSTOMER', 'ACTIVE', legacyHash);
+
+      await login(legacy.email, STRONG_PASSWORD).expect(200);
+
+      const upgraded = await prisma.user.findUniqueOrThrow({ where: { id: legacy.id } });
+      expect(upgraded.passwordHash).not.toBe(legacyHash);
+      expect(isBcryptHash(upgraded.passwordHash)).toBe(true);
+      // Lần sau đăng nhập bằng hash bcrypt mới
+      await login(legacy.email, STRONG_PASSWORD).expect(200);
+      await login(legacy.email, 'WrongPass@123').expect(401);
     });
 
     it('400 — mật khẩu chứa khoảng trắng / thiếu trường', async () => {
@@ -333,7 +423,77 @@ describe('Auth & RBAC (e2e)', () => {
         .expect(401);
     });
 
-    it('POST /api/auth/logout — 200 và ghi AuditLog LOGOUT', async () => {
+    // BM-06 — luồng cấp quyền riêng, chỉ ADMIN, có audit log
+    describe('PATCH /api/users/:id/roles', () => {
+      const assignRole = (token: string | undefined, userId: string, role: unknown) => {
+        const call = request(app.getHttpServer()).patch(`/api/users/${userId}/roles`);
+        return (token ? call.set('Authorization', `Bearer ${token}`) : call).send({ role });
+      };
+      const tokenOf = async (email: string) =>
+        (await login(email, STRONG_PASSWORD)).body.data.access_token as string;
+
+      it('401 — không có token', async () => {
+        await assignRole(undefined, randomUUID(), 'ADMIN').expect(401);
+      });
+
+      it('403 — CUSTOMER tự cấp ADMIN cho chính mình bị chặn, vai trò trong CSDL không đổi', async () => {
+        const me = await prisma.user.findUniqueOrThrow({ where: { email: customer.email } });
+        await assignRole(customerToken, me.id, 'ADMIN').expect(403);
+        const roles = await prisma.userRole.findMany({ where: { userId: me.id }, include: { role: true } });
+        expect(roles.map((row) => row.role.name)).toEqual(['CUSTOMER']);
+      });
+
+      it('200 — ADMIN cấp/thu hồi quyền: có hiệu lực ngay với token đang dùng, ghi AuditLog ROLE_CHANGE', async () => {
+        const admin = await createUserDirect('ADMIN');
+        const target = await createUserDirect('CUSTOMER');
+        const adminToken = await tokenOf(admin.email);
+        const targetToken = await tokenOf(target.email); // token phát hành khi còn là CUSTOMER
+
+        const promoted = await assignRole(adminToken, target.id, 'staff').expect(200);
+        expect(promoted.body.data).toMatchObject({ roles: ['STAFF'], previousRoles: ['CUSTOMER'] });
+        await request(app.getHttpServer())
+          .get('/api/users')
+          .set('Authorization', `Bearer ${targetToken}`)
+          .expect(200);
+
+        await assignRole(adminToken, target.id, 'CUSTOMER').expect(200);
+        await request(app.getHttpServer())
+          .get('/api/users')
+          .set('Authorization', `Bearer ${targetToken}`)
+          .expect(403);
+
+        // created_at là TIMESTAMP(0): hai lần đổi trong cùng một giây → không dựa vào thứ tự bản ghi
+        const audits = await prisma.auditLog.findMany({
+          where: { entityId: target.id, action: 'ROLE_CHANGE' },
+        });
+        expect(audits).toHaveLength(2);
+        expect(audits).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              actorUserId: admin.id,
+              entityType: 'User',
+              oldValue: { roles: ['CUSTOMER'] },
+              newValue: { roles: ['STAFF'] },
+            }),
+            expect.objectContaining({
+              actorUserId: admin.id,
+              oldValue: { roles: ['STAFF'] },
+              newValue: { roles: ['CUSTOMER'] },
+            }),
+          ]),
+        );
+      });
+
+      it('400 — ADMIN tự đổi vai trò của mình / vai trò không hợp lệ; 404 — tài khoản không tồn tại', async () => {
+        const admin = await createUserDirect('ADMIN');
+        const adminToken = await tokenOf(admin.email);
+        await assignRole(adminToken, admin.id, 'CUSTOMER').expect(400);
+        await assignRole(adminToken, admin.id, 'SUPERADMIN').expect(400);
+        await assignRole(adminToken, randomUUID(), 'SELLER').expect(404);
+      });
+    });
+
+    it('POST /api/auth/logout — 200, ghi AuditLog LOGOUT và THU HỒI token vừa dùng (BM-03)', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/auth/logout')
         .set('Authorization', `Bearer ${customerToken}`)
@@ -345,6 +505,21 @@ describe('Auth & RBAC (e2e)', () => {
         where: { entityId: me.id, action: 'LOGOUT' },
       });
       expect(audit).not.toBeNull();
+
+      // Token đã logout bị từ chối dù chưa hết hạn; jti nằm trong revoked_token
+      await request(app.getHttpServer())
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${customerToken}`)
+        .expect(401);
+      const { jti } = decodeJwt(customerToken);
+      await expect(prisma.revokedToken.findUnique({ where: { jti } })).resolves.not.toBeNull();
+
+      // Chỉ thu hồi phiên hiện tại: đăng nhập lại có token mới dùng được
+      const fresh = (await login(customer.email, customer.password)).body.data.access_token;
+      await request(app.getHttpServer())
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${fresh}`)
+        .expect(200);
     });
 
     it('401 — logout khi chưa đăng nhập', async () => {

@@ -8,7 +8,6 @@ import type { AuthenticatedUser } from '../../../common/interfaces/authenticated
 import { Prisma, type SubOrderStatus } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { rollUpOrder, shipmentTransitions } from '../../cart-order/sub-orders/sub-order.fsm';
-import { recordPaymentStatus } from '../../payment-refund/payments/payments.service';
 import type { UpdateShipmentStatusDto } from './dto/update-shipment-status.dto';
 
 const include = {
@@ -124,7 +123,15 @@ export class ShipmentsService {
           master.payment?.method === 'COD' &&
           master.payment.status === 'PENDING'
         ) {
-          await recordPaymentStatus(db, master.payment.id, 'SUCCEEDED');
+          // NV-01: giao đủ KHÔNG đồng nghĩa nền tảng đã nhận tiền. Chưa có nguồn ghi nhận thu COD độc lập
+          // → chuyển sang chờ đối soát thủ công thay vì tự SUCCEEDED; resolvedAt để trống vì tiền chưa xác nhận.
+          await db.payment.update({
+            where: { id: master.payment.id },
+            data: {
+              status: 'PENDING_MANUAL_RECONCILIATION',
+              events: { create: { status: 'PENDING_MANUAL_RECONCILIATION' } },
+            },
+          });
         }
         return this.detail(db, id);
       },

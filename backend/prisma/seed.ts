@@ -1,11 +1,13 @@
 /**
- * Seed dữ liệu nền cho Miền 1 (Auth & User) — IDEMPOTENT (chạy lại nhiều lần không trùng).
- * Chạy: npx -w backend prisma db seed
+ * Seed dữ liệu — IDEMPOTENT (chạy lại nhiều lần không trùng).
+ * Chạy: npx -w backend prisma db seed        (thêm dữ liệu demo: đặt SEED_DEMO=true trong backend/.env)
  *
- * - 4 Role: CUSTOMER, SELLER, STAFF, ADMIN
- * - Permission cơ bản theo miền + gán RolePermission
- * - 4 tài khoản mẫu và số dư Điểm xanh để thử giảm giá
- * - 2 cửa hàng, 3 sản phẩm và voucher GREEN50 để thử luồng mua hàng
+ * SECURITY (BM-04):
+ * - TỪ CHỐI chạy khi NODE_ENV=production (seed chứa tài khoản mẫu có đặc quyền).
+ * - Dữ liệu lõi (luôn chạy): 4 Role CUSTOMER, SELLER, STAFF, ADMIN + Permission theo miền + RolePermission.
+ * - Dữ liệu demo (CHỈ khi SEED_DEMO=true): 4 tài khoản mẫu + số dư Điểm xanh, 2 cửa hàng, 3 sản phẩm,
+ *   voucher GREEN50. Tài khoản mẫu đã tồn tại được GIỮ NGUYÊN (không đặt lại mật khẩu, trạng thái, vai trò).
+ * - Không in mật khẩu ra stdout (mật khẩu demo ghi trong README.md, chỉ dùng cho máy phát triển).
  */
 import 'dotenv/config';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
@@ -13,9 +15,8 @@ import { PrismaClient } from '../src/generated/prisma/client';
 import { hashPassword } from '../src/common/utils/password.util';
 
 const databaseUrl = process.env.DATABASE_URL;
-const salt = process.env.PASSWORD_SALT;
-if (!databaseUrl || !salt) {
-  throw new Error('Thiếu DATABASE_URL hoặc PASSWORD_SALT trong backend/.env');
+if (!databaseUrl) {
+  throw new Error('Thiếu DATABASE_URL trong backend/.env');
 }
 
 const url = new URL(databaseUrl);
@@ -127,6 +128,12 @@ const SAMPLE_USERS: {
 ];
 
 async function main(): Promise<void> {
+  // SECURITY (BM-04): không bao giờ seed vào môi trường production
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Từ chối chạy seed khi NODE_ENV=production.');
+  }
+
+  // ===== Dữ liệu lõi — luôn chạy =====
   // 1) Roles
   const roleIds = new Map<RoleName, string>();
   for (const r of ROLES) {
@@ -170,28 +177,38 @@ async function main(): Promise<void> {
   }
   console.log(`✔ ${links} role_permission`);
 
-  // 4) Tài khoản mẫu + UserRole + GreenPointAccount
-  for (const u of SAMPLE_USERS) {
-    const passwordHash = hashPassword(u.password, salt!);
-    const user = await prisma.user.upsert({
-      where: { email: u.email },
-      update: { fullName: u.fullName, phone: u.phone, passwordHash, status: 'ACTIVE' },
-      create: { email: u.email, fullName: u.fullName, phone: u.phone, passwordHash, status: 'ACTIVE' },
-    });
-    const roleId = roleIds.get(u.role)!;
-    await prisma.userRole.upsert({
-      where: { userId_roleId: { userId: user.id, roleId } },
-      update: {},
-      create: { userId: user.id, roleId },
-    });
-    await prisma.greenPointAccount.upsert({
-      where: { userId: user.id },
-      update: {},
-      create: { userId: user.id, balance: u.role === 'CUSTOMER' ? 1_240n : 0n },
-    });
-    console.log(`✔ ${u.role.padEnd(8)} ${u.email} / ${u.password}`);
+  // ===== Dữ liệu demo — chỉ khi bật tường minh =====
+  if (process.env.SEED_DEMO !== 'true') {
+    console.log('ℹ Bỏ qua tài khoản và dữ liệu mua sắm mẫu (đặt SEED_DEMO=true để tạo).');
+    return;
   }
+  await seedDemoAccounts(roleIds);
   await seedShopping();
+}
+
+/** 4) Tài khoản mẫu + UserRole + GreenPointAccount — chỉ TẠO MỚI, không ghi đè tài khoản đã có. */
+async function seedDemoAccounts(roleIds: Map<RoleName, string>) {
+  for (const u of SAMPLE_USERS) {
+    const existing = await prisma.user.findUnique({ where: { email: u.email }, select: { id: true } });
+    if (existing) {
+      // Không đặt lại mật khẩu/ACTIVE/vai trò → không tái kích hoạt tài khoản mẫu đã bị khóa hay hạ quyền
+      console.log(`• ${u.role.padEnd(8)} ${u.email} (đã tồn tại, giữ nguyên)`);
+      continue;
+    }
+    await prisma.user.create({
+      data: {
+        email: u.email,
+        fullName: u.fullName,
+        phone: u.phone,
+        passwordHash: await hashPassword(u.password),
+        status: 'ACTIVE',
+        roles: { create: { roleId: roleIds.get(u.role)! } },
+        greenPointAccount: { create: { balance: u.role === 'CUSTOMER' ? 1_240n : 0n } },
+      },
+    });
+    // Không in mật khẩu ra stdout (log CI/terminal dùng chung có thể bị lưu lại)
+    console.log(`✔ ${u.role.padEnd(8)} ${u.email}`);
+  }
 }
 
 async function seedShopping() {

@@ -148,7 +148,7 @@ npx -w backend prisma migrate dev
 - `migrate dev` in ra `Your database is now in sync with your schema`.
 - Thư mục `backend/src/generated/prisma/` đã xuất hiện.
 - Trong phpMyAdmin, database `green_shopping` có các bảng (`user`, `role`, `user_role`, `address`, ...).
-Nạp dữ liệu mẫu (role, permission, 4 tài khoản mẫu — chạy lại nhiều lần không bị trùng):
+Nạp dữ liệu mẫu (role, permission; 4 tài khoản mẫu + cửa hàng demo **chỉ khi** `SEED_DEMO=true` trong `backend\.env` — chạy lại nhiều lần không bị trùng, seed bị chặn khi `NODE_ENV=production`):
  
 ```powershell
 npx -w backend prisma db seed
@@ -161,7 +161,7 @@ npx -w backend prisma db seed
 | SELLER | `seller@greenshopping.vn` | `Seller@123` | `/seller/dashboard` |
 | CUSTOMER | `customer@greenshopping.vn` | `Customer@123` | `/` |
 
-> Mật khẩu băm bằng SHA-256 + `PASSWORD_SALT` trong `backend/.env`. Đổi `PASSWORD_SALT` thì phải chạy lại seed.
+> Mật khẩu băm bằng bcrypt. `PASSWORD_SALT` chỉ còn dùng để xác minh hash SHA-256 cũ (tự nâng cấp sang bcrypt khi đăng nhập) — không đổi giá trị này khi CSDL còn tài khoản cũ.
 
 Chạy E2E test cho Auth (cần MySQL đang chạy và đã migrate):
 

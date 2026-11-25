@@ -5,12 +5,17 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma, type PaymentStatus } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { lockCustomer } from '../../cart-order/cart/cart.service';
 
 export const PAYMENT_WINDOW_MS = 15 * 60_000;
 export type MockPaymentOutcome = 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
+
+/** NV-01: thông báo khi cổng thanh toán mô phỏng bị tắt (PAYMENT_MOCK_ENABLED khác "true"). */
+export const MOCK_PAYMENT_DISABLED_MESSAGE =
+  'Cổng thanh toán mô phỏng không khả dụng trong môi trường này.';
 
 export async function clearPurchasedCartItems(
   db: Prisma.TransactionClient,
@@ -51,8 +56,18 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PaymentsService.name);
   private timer?: ReturnType<typeof setInterval>;
   private sweeping = false;
+  /**
+   * SECURITY (NV-01): cổng mô phỏng chỉ hoạt động khi PAYMENT_MOCK_ENABLED=true (mặc định false).
+   * Bộ quét giao dịch hết hạn vẫn chạy để dọn các đơn MOCK tạo trước khi tắt cờ (hoàn kho/điểm).
+   */
+  readonly mockEnabled: boolean;
 
-  constructor(private readonly db: PrismaService) {}
+  constructor(
+    private readonly db: PrismaService,
+    config: ConfigService,
+  ) {
+    this.mockEnabled = config.get<boolean>('PAYMENT_MOCK_ENABLED') === true;
+  }
 
   onModuleInit() {
     this.timer = setInterval(() => void this.sweepExpired(), 15_000);

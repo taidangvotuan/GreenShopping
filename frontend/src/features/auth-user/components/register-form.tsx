@@ -11,7 +11,6 @@ import { useRegister } from '../hooks/use-auth';
 import {
   PASSWORD_RULES,
   registerSchema,
-  ROLE_OPTIONS,
   todayInVietnam,
   type RegisterFormInput,
   type RegisterFormValues,
@@ -88,14 +87,14 @@ export function RegisterForm() {
       email: '',
       password: '',
       confirmPassword: '',
-      role: 'CUSTOMER',
       acceptTerms: false,
     },
   });
 
   const password = useWatch({ control, name: 'password' }) ?? '';
 
-  // acceptTerms chỉ dùng ở giao diện; confirmPassword & role gửi lên để backend kiểm tra lại.
+  // acceptTerms chỉ dùng ở giao diện; confirmPassword gửi lên để backend kiểm tra lại.
+  // Không gửi vai trò: tài khoản đăng ký công khai luôn là Khách hàng (BM-06).
   const onSubmit = ({ acceptTerms: _terms, ...payload }: RegisterFormValues) =>
     registerMutation.mutate(payload);
 
@@ -183,30 +182,6 @@ export function RegisterForm() {
         error={errors.confirmPassword?.message}
         {...register('confirmPassword')}
       />
-
-      <fieldset className="space-y-2">
-        <legend className="mb-2 text-sm font-semibold text-gray-900">Vai trò *</legend>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {ROLE_OPTIONS.map((option) => (
-            <label
-              key={option.value}
-              className={cn(
-                'flex h-11 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2 text-sm font-medium text-gray-700',
-                'has-[:checked]:border-primary-900 has-[:checked]:bg-primary-100 has-[:checked]:text-primary-900',
-                'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary-500',
-              )}
-            >
-              <input type="radio" value={option.value} className="sr-only" {...register('role')} />
-              {option.label}
-            </label>
-          ))}
-        </div>
-        {errors.role?.message && (
-          <p role="alert" className="text-xs font-medium text-red-700">
-            {errors.role.message}
-          </p>
-        )}
-      </fieldset>
 
       <div className="space-y-1">
         <label className="flex cursor-pointer items-start gap-3 text-sm text-gray-900">

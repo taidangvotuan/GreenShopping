@@ -63,7 +63,9 @@ export function PaymentResult({ id }: { id: string }) {
   const payment = data.payment;
   const awaiting = data.status === 'AWAITING_PAYMENT' && payment.status === 'PENDING';
   const cod = payment.method === 'COD';
-  const completed = payment.status === 'SUCCEEDED' || (cod && payment.status === 'PENDING');
+  const completed =
+    payment.status === 'SUCCEEDED' ||
+    (cod && (payment.status === 'PENDING' || payment.status === 'PENDING_MANUAL_RECONCILIATION'));
   const items = data.subOrders.flatMap((shop) => shop.items);
   const retry = new URLSearchParams();
   for (const item of items) {

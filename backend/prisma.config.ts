@@ -13,6 +13,8 @@ export default defineConfig({
     seed: 'npm run db:seed',
   },
   datasource: {
-    url: env('DATABASE_URL'),
+    // SECURITY (VH-01): Prisma CLI (migrate dev/deploy/reset) cần quyền DDL → tài khoản migration riêng.
+    // Ứng dụng chạy bằng DATABASE_URL (tài khoản chỉ có DML). Thiếu biến này → dùng DATABASE_URL như cũ.
+    url: process.env.MIGRATION_DATABASE_URL ?? env('DATABASE_URL'),
   },
 });

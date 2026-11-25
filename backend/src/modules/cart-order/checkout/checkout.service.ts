@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
@@ -25,8 +30,14 @@ export class CheckoutService {
   }
 
   async place(userId: string, input: CheckoutDto) {
-    await this.payments.expirePending(userId);
     const { requestId, address, paymentMethod } = input;
+    // SECURITY (NV-01): không tạo giao dịch MOCK khi cổng mô phỏng bị tắt — đơn sẽ không thể thanh toán
+    if (paymentMethod === 'MOCK' && !this.payments.mockEnabled) {
+      throw new ForbiddenException(
+        'Thanh toán online mô phỏng đang tắt trong môi trường này. Vui lòng chọn thanh toán khi nhận hàng (COD).',
+      );
+    }
+    await this.payments.expirePending(userId);
     const requestHash = createHash('sha256')
       .update(
         JSON.stringify([
