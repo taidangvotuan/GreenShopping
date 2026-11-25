@@ -3,6 +3,7 @@ import {
   Controller,
   DefaultValuePipe,
   Get,
+  NotFoundException,
   Param,
   ParseEnumPipe,
   ParseIntPipe,
@@ -15,7 +16,7 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { PaymentStatus } from '../../../generated/prisma/client';
 import { MockPaymentResultDto } from './dto/payment-callback.dto';
-import { PaymentsService } from './payments.service';
+import { MOCK_PAYMENT_DISABLED_MESSAGE, PaymentsService } from './payments.service';
 
 @ApiTags('Payments')
 @ApiBearerAuth()
@@ -39,6 +40,8 @@ export class PaymentsController {
     @Param('orderId', ParseUUIDPipe) orderId: string,
     @Body() input: MockPaymentResultDto,
   ) {
+    // SECURITY (NV-01): ngoài môi trường demo, endpoint mô phỏng coi như không tồn tại
+    if (!this.service.mockEnabled) throw new NotFoundException(MOCK_PAYMENT_DISABLED_MESSAGE);
     return this.service.resolve(userId, orderId, input.outcome);
   }
 }

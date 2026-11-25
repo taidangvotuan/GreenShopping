@@ -1,7 +1,14 @@
 import type { Product } from '../shop-product/types';
 
 export type PaymentMethod = 'MOCK' | 'COD';
-export type PaymentStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
+/** PENDING_MANUAL_RECONCILIATION: COD đã giao đủ, chờ đối soát tiền thu hộ (backend không tự SUCCEEDED). */
+export type PaymentStatus =
+  | 'PENDING'
+  | 'SUCCEEDED'
+  | 'FAILED'
+  | 'EXPIRED'
+  | 'CANCELLED'
+  | 'PENDING_MANUAL_RECONCILIATION';
 export type OrderStatus =
   'AWAITING_PAYMENT' | 'PROCESSING' | 'SHIPPING' | 'DELIVERY_ISSUE' | 'COMPLETED' | 'CANCELLED';
 export type ShipmentStatus =

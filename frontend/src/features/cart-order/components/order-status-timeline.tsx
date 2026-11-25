@@ -14,6 +14,7 @@ export const paymentLabels: Record<PaymentStatus, string> = {
   FAILED: 'Thất bại',
   EXPIRED: 'Hết hạn',
   CANCELLED: 'Đã hủy',
+  PENDING_MANUAL_RECONCILIATION: 'Chờ đối soát',
 };
 export const orderLabels: Record<OrderStatus, string> = {
   AWAITING_PAYMENT: 'Chờ thanh toán',
@@ -61,6 +62,7 @@ export const paymentTone: Record<PaymentStatus, BadgeTone> = {
   FAILED: 'red',
   EXPIRED: 'red',
   CANCELLED: 'red',
+  PENDING_MANUAL_RECONCILIATION: 'amber',
 };
 
 export function StatusBadge({ label, tone = 'neutral' }: { label: string; tone?: BadgeTone }) {
@@ -130,6 +132,8 @@ export function buildOrderSteps(
   const shipped = order.subOrders.filter((s) => SHIPPED.includes(s.status)).length;
   const cancelled = status === 'CANCELLED';
   const paymentFailed = ['FAILED', 'EXPIRED', 'CANCELLED'].includes(payment.status);
+  // COD giao đủ nhưng nền tảng chưa xác nhận đã nhận tiền → không hiển thị "Đã thu"
+  const awaitingReconciliation = payment.status === 'PENDING_MANUAL_RECONCILIATION';
 
   const paymentStep: Step =
     payment.method === 'COD'
@@ -138,10 +142,19 @@ export function buildOrderSteps(
           detail:
             payment.status === 'SUCCEEDED'
               ? `Đã thu ${payment.resolvedAt ? dateTime(payment.resolvedAt) : ''}`.trim()
-              : cancelled
-                ? 'Đơn đã hủy'
-                : 'Thu tiền khi giao',
-          state: payment.status === 'SUCCEEDED' ? 'done' : cancelled ? 'failed' : 'upcoming',
+              : awaitingReconciliation
+                ? 'Đã giao, chờ đối soát tiền thu hộ'
+                : cancelled
+                  ? 'Đơn đã hủy'
+                  : 'Thu tiền khi giao',
+          state:
+            payment.status === 'SUCCEEDED'
+              ? 'done'
+              : awaitingReconciliation
+                ? 'current'
+                : cancelled
+                  ? 'failed'
+                  : 'upcoming',
         }
       : payment.status === 'SUCCEEDED'
         ? {

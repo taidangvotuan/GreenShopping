@@ -22,10 +22,11 @@ services:
       - --default-time-zone=+00:00
     ports:
       # Cổng máy 3307 → container 3306 (tránh đụng MySQL/XAMPP cài sẵn; khớp DATABASE_URL trong backend/.env)
-      - "3307:3306"
+      # SECURITY (VH-01): chỉ lắng nghe trên loopback → máy khác trong mạng LAN/Wi-Fi không kết nối được
+      - "127.0.0.1:3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      # Script chạy MỘT LẦN khi volume còn trống (cấp quyền cho shadow DB của Prisma)
+      # Script chạy MỘT LẦN khi volume còn trống: tách tài khoản migration (DDL) và ứng dụng (DML)
       - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root_dev_pw}"]
@@ -46,7 +47,8 @@ services:
       UPLOAD_LIMIT: 64M
     ports:
       # phpMyAdmin lắng nghe cổng 80 trong container → http://localhost:8080
-      - "8080:80"
+      # SECURITY (VH-01): chỉ truy cập được từ chính máy chạy Docker
+      - "127.0.0.1:8080:80"
 
 volumes:
   mysql_data:

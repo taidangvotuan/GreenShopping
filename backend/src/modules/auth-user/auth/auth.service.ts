@@ -1,22 +1,30 @@
+import { randomUUID } from 'node:crypto';
 import {
   ConflictException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import type { JwtPayload } from '../../../common/interfaces/authenticated-request.interface';
-import { hashPassword, verifyPassword } from '../../../common/utils/password.util';
+import type {
+  AuthenticatedUser,
+  JwtPayload,
+} from '../../../common/interfaces/authenticated-request.interface';
+import {
+  hashPassword,
+  simulatePasswordCheck,
+  verifyPassword,
+} from '../../../common/utils/password.util';
 import type { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   AUDIT_ACTION,
-  DEFAULT_ROLE,
   INVALID_CREDENTIALS_MESSAGE,
   normalizeVnPhone,
-  REGISTERABLE_ROLES,
+  PUBLIC_REGISTRATION_ROLE,
   USER_STATUS,
 } from './auth.constants';
 import type { AuthUserDto, LoginResponseDto, LogoutResponseDto } from './dto/auth-response.dto';
@@ -40,9 +48,41 @@ const userWithAccessInclude = {
 
 type UserWithAccess = Prisma.UserGetPayload<{ include: typeof userWithAccessInclude }>;
 
+const EMAIL_TAKEN_MESSAGE = 'Email đã được sử dụng';
+const PHONE_TAKEN_MESSAGE = 'Số điện thoại đã được sử dụng';
+
+/** Phần `meta` của lỗi Prisma P2002 (unique constraint) mà ta cần đọc. */
+interface UniqueViolationMeta {
+  target?: unknown;
+  driverAdapterError?: { cause?: { constraint?: { index?: unknown; fields?: unknown } } };
+}
+
+/**
+ * Trả về chuỗi mô tả cột/index bị trùng (chữ thường) nếu lỗi là P2002, ngược lại null.
+ * Prisma 7 + driver adapter MariaDB KHÔNG điền `meta.target`; tên index (vd. `user_phone_key`) nằm ở
+ * `meta.driverAdapterError.cause.constraint` → đọc cả hai nguồn để đúng ở mọi phiên bản.
+ */
+function uniqueViolationTarget(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null) return null;
+  const { code, meta } = error as { code?: unknown; meta?: UniqueViolationMeta };
+  if (code !== 'P2002') return null;
+  const constraint = meta?.driverAdapterError?.cause?.constraint;
+  const parts: unknown[] = [
+    ...(Array.isArray(meta?.target) ? meta.target : [meta?.target]),
+    constraint?.index,
+    ...(Array.isArray(constraint?.fields) ? constraint.fields : []),
+  ];
+  return parts
+    .filter((part): part is string => typeof part === 'string')
+    .join(' ')
+    .toLowerCase();
+}
+
 @Injectable()
 export class AuthService {
-  private readonly salt: string;
+  private readonly logger = new Logger(AuthService.name);
+  /** Muối của định dạng SHA-256 cũ — chỉ dùng để xác minh rồi nâng cấp hash cũ sang bcrypt. */
+  private readonly legacySalt: string;
   private readonly expiresIn: string;
 
   constructor(
@@ -50,8 +90,8 @@ export class AuthService {
     private readonly jwt: JwtService,
     config: ConfigService,
   ) {
-    this.salt = config.getOrThrow<string>('PASSWORD_SALT');
-    this.expiresIn = config.get<string>('JWT_ACCESS_EXPIRES_IN') ?? '7d';
+    this.legacySalt = config.getOrThrow<string>('PASSWORD_SALT');
+    this.expiresIn = config.getOrThrow<string>('JWT_ACCESS_EXPIRES_IN');
   }
 
   // ------------------------------------------------------------------
@@ -68,12 +108,12 @@ export class AuthService {
     });
     if (existing) {
       throw new ConflictException(
-        existing.email === email ? 'Email đã được sử dụng' : 'Số điện thoại đã được sử dụng',
+        existing.email === email ? EMAIL_TAKEN_MESSAGE : PHONE_TAKEN_MESSAGE,
       );
     }
 
-    // Role đã qua whitelist ở DTO (@IsIn REGISTERABLE_ROLES); kiểm tra lại phòng khi DTO bị bỏ qua.
-    const roleName = REGISTERABLE_ROLES.includes(dto.role) ? dto.role : DEFAULT_ROLE;
+    // SECURITY (BM-06): vai trò cố định phía server — payload không có (và không được có) trường role.
+    const roleName = PUBLIC_REGISTRATION_ROLE;
     // SECURITY: Chống SQL Injection bằng parameterized query
     const role = await this.prisma.role.findUnique({ where: { name: roleName } });
     if (!role) {
@@ -81,7 +121,8 @@ export class AuthService {
       throw new InternalServerErrorException(`Hệ thống chưa khởi tạo vai trò ${roleName}`);
     }
 
-    const passwordHash = hashPassword(dto.password, this.salt);
+    // BM-02: bcrypt (salt riêng từng hash, cost BCRYPT_COST)
+    const passwordHash = await hashPassword(dto.password);
 
     try {
       // Tạo User + UserRole + GreenPointAccount + AuditLog trong MỘT transaction:
@@ -139,9 +180,17 @@ export class AuthService {
 
       return this.toAuthUser(user);
     } catch (e) {
-      // Hai request đăng ký cùng email chạy song song → UNIQUE(email) của MySQL chặn lại
-      if ((e as { code?: string }).code === 'P2002') {
-        throw new ConflictException('Email đã được sử dụng');
+      // DL-01: hai request đăng ký song song cùng email/SĐT cùng qua bước kiểm tra phía trên
+      // → UNIQUE(email) / UNIQUE(phone) của MySQL chặn lại; báo 409 đúng trường bị trùng.
+      const target = uniqueViolationTarget(e);
+      if (target !== null) {
+        throw new ConflictException(
+          target.includes('phone')
+            ? PHONE_TAKEN_MESSAGE
+            : target.includes('email')
+              ? EMAIL_TAKEN_MESSAGE
+              : 'Email hoặc số điện thoại đã được sử dụng',
+        );
       }
       throw e;
     }
@@ -152,21 +201,27 @@ export class AuthService {
   // ------------------------------------------------------------------
   async login(dto: LoginDto, meta: RequestMeta): Promise<LoginResponseDto> {
     const identifier = dto.identifier.trim();
-    const where: Prisma.UserWhereInput = identifier.includes('@')
+    // DL-01: email và SĐT đều UNIQUE → mỗi định danh trỏ tới đúng một tài khoản
+    const where: Prisma.UserWhereUniqueInput = identifier.includes('@')
       ? { email: identifier.toLowerCase() }
       : { phone: normalizeVnPhone(identifier) };
 
     // SECURITY: Chống SQL Injection bằng parameterized query
     // (identifier chỉ được truyền như GIÁ TRỊ tham số, không bao giờ nối chuỗi SQL)
-    const user = await this.prisma.user.findFirst({ where, include: userWithAccessInclude });
+    const user = await this.prisma.user.findUnique({ where, include: userWithAccessInclude });
 
     if (!user) {
-      // Vẫn băm một lần để thời gian phản hồi tương đương → khó dò email/SĐT tồn tại
-      hashPassword(dto.password, this.salt);
+      // Vẫn chạy một lần so khớp bcrypt để thời gian phản hồi tương đương → khó dò email/SĐT tồn tại
+      await simulatePasswordCheck(dto.password);
       throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
     }
-    if (!verifyPassword(dto.password, this.salt, user.passwordHash)) {
+    const passwordCheck = await verifyPassword(dto.password, user.passwordHash, this.legacySalt);
+    if (!passwordCheck.valid) {
       throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
+    }
+    // BM-02: hash SHA-256 cũ (hoặc bcrypt cost thấp) → nâng cấp sang bcrypt ngay khi mật khẩu đúng
+    if (passwordCheck.needsRehash) {
+      await this.upgradePasswordHash(user.id, user.passwordHash, dto.password);
     }
 
     // Chỉ báo trạng thái tài khoản SAU KHI mật khẩu đúng (tránh lộ thông tin cho kẻ dò)
@@ -180,6 +235,8 @@ export class AuthService {
     const authUser = this.toAuthUser(user);
     const payload: JwtPayload = {
       sub: user.id,
+      // BM-03: định danh phiên — logout thu hồi đúng token này
+      jti: randomUUID(),
       email: user.email,
       roles: authUser.roles,
       permissions: authUser.permissions,
@@ -206,19 +263,28 @@ export class AuthService {
   }
 
   // ------------------------------------------------------------------
-  // POST /auth/logout — JWT là stateless: client xóa token, server ghi nhật ký
+  // POST /auth/logout — thu hồi access token hiện tại (jti) + ghi nhật ký
   // ------------------------------------------------------------------
-  async logout(userId: string, meta: RequestMeta): Promise<LogoutResponseDto> {
+  async logout(user: AuthenticatedUser, meta: RequestMeta): Promise<LogoutResponseDto> {
+    // SECURITY (BM-03): JwtStrategy từ chối jti đã thu hồi cho tới khi token tự hết hạn.
     // SECURITY: Chống SQL Injection bằng parameterized query
-    await this.prisma.auditLog.create({
-      data: {
-        actorUserId: userId,
-        action: AUDIT_ACTION.LOGOUT,
-        entityType: 'User',
-        entityId: userId,
-        note: this.formatMeta(meta),
-      },
-    });
+    await this.prisma.$transaction([
+      this.prisma.revokedToken.upsert({
+        where: { jti: user.jti },
+        create: { jti: user.jti, userId: user.userId, expiresAt: user.tokenExpiresAt },
+        update: {},
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          actorUserId: user.userId,
+          action: AUDIT_ACTION.LOGOUT,
+          entityType: 'User',
+          entityId: user.userId,
+          note: this.formatMeta(meta),
+        },
+      }),
+    ]);
+    await this.pruneExpiredRevocations();
     return { loggedOut: true };
   }
 
@@ -236,6 +302,35 @@ export class AuthService {
   }
 
   // ------------------------------------------------------------------
+  /**
+   * Ghi hash bcrypt mới. Điều kiện theo hash cũ → không ghi đè nếu mật khẩu vừa đổi ở request khác.
+   * Lỗi ở bước này không chặn đăng nhập (mật khẩu đã đúng); lần đăng nhập sau sẽ thử nâng cấp lại.
+   */
+  private async upgradePasswordHash(
+    userId: string,
+    currentHash: string,
+    password: string,
+  ): Promise<void> {
+    try {
+      // SECURITY: Chống SQL Injection bằng parameterized query
+      await this.prisma.user.updateMany({
+        where: { id: userId, passwordHash: currentHash },
+        data: { passwordHash: await hashPassword(password) },
+      });
+    } catch (error) {
+      this.logger.warn(`Không nâng cấp được hash mật khẩu của user ${userId}: ${String(error)}`);
+    }
+  }
+
+  /** Bản ghi thu hồi chỉ cần giữ tới khi token tự hết hạn — dọn dần để bảng không phình. */
+  private async pruneExpiredRevocations(): Promise<void> {
+    try {
+      await this.prisma.revokedToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+    } catch (error) {
+      this.logger.warn(`Không dọn được revoked_token đã hết hạn: ${String(error)}`);
+    }
+  }
+
   private toAuthUser(user: UserWithAccess): AuthUserDto {
     const roles = user.roles.map((ur) => ur.role.name);
     const permissions = [

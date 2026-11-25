@@ -2,7 +2,6 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsEmail,
-  IsIn,
   IsNotEmpty,
   IsString,
   Matches,
@@ -15,14 +14,16 @@ import {
   isValidBirthDate,
   NO_WHITESPACE_REGEX,
   PASSWORD_REGEX,
-  REGISTERABLE_ROLES,
-  type RegisterableRole,
   trimValue,
   VN_PHONE_REGEX,
 } from '../auth.constants';
 
 /**
- * Đăng ký tài khoản.
+ * Đăng ký tài khoản khách hàng.
+ *
+ * SECURITY (BM-06): DTO cố ý KHÔNG có trường `role`. ValidationPipe toàn cục bật
+ * `whitelist + forbidNonWhitelisted` → request gửi kèm `role` (hay field lạ bất kỳ) bị từ chối 400.
+ * Vai trò do server gán cố định: PUBLIC_REGISTRATION_ROLE (CUSTOMER).
  *
  * Quy tắc khoảng trắng:
  *  - Mọi trường: trim 2 đầu, chuỗi rỗng / toàn khoảng trắng bị từ chối.
@@ -125,10 +126,4 @@ export class RegisterDto {
     { message: 'Mật khẩu xác nhận không khớp' },
   )
   confirmPassword: string;
-
-  @ApiProperty({ enum: REGISTERABLE_ROLES, example: 'CUSTOMER' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
-  @IsString({ message: 'Vai trò phải là chuỗi' })
-  @IsIn(REGISTERABLE_ROLES, { message: 'Vai trò không hợp lệ' })
-  role: RegisterableRole;
 }

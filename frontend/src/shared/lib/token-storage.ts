@@ -2,13 +2,16 @@
  * Lưu access token + roles trong COOKIE để Edge Middleware (server) đọc được khi điều hướng.
  *
  * Lưu ý bảo mật: cookie đặt từ JavaScript không thể là HttpOnly → vẫn đọc được bởi JS.
- * Giảm thiểu: SameSite=Lax (chống CSRF điều hướng chéo), Secure khi chạy HTTPS, hạn = hạn JWT.
+ * Giảm thiểu: SameSite=Lax (chống CSRF điều hướng chéo), Secure khi chạy HTTPS, hạn = hạn JWT
+ * (access token ngắn hạn, mặc định 30 phút), logout gọi API để backend THU HỒI token (revoked_token).
  * Quyền thật sự luôn được backend kiểm tra (JwtAuthGuard + RolesGuard); middleware chỉ để UX.
+ * Chuyển sang cookie HttpOnly do backend phát hành là hạng mục riêng (xem FIX_P0_REPORT.md).
  */
 export const ACCESS_TOKEN_COOKIE = 'gs_access_token';
 export const ROLES_COOKIE = 'gs_roles';
 
-const DEFAULT_MAX_AGE = 7 * 24 * 60 * 60; // 7 ngày — khớp JWT_ACCESS_EXPIRES_IN
+/** Chỉ dùng khi không đọc được claim exp — khớp JWT_ACCESS_EXPIRES_IN mặc định (30m). */
+const DEFAULT_MAX_AGE = 30 * 60;
 
 const isBrowser = () => typeof document !== 'undefined';
 

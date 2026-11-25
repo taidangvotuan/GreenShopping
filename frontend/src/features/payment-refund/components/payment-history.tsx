@@ -8,6 +8,7 @@ import { dateTime, money } from '../../cart-order/components/checkout-summary';
 import {
   orderCode,
   paymentLabels,
+  paymentTone,
   StatusBadge,
 } from '../../cart-order/components/order-status-timeline';
 import type { PaymentStatus } from '../../cart-order/types';
@@ -70,13 +71,7 @@ export function PaymentManagement() {
                   <td className="p-3">
                     <StatusBadge
                       label={paymentLabels[payment.status]}
-                      tone={
-                        payment.status === 'SUCCEEDED'
-                          ? 'green'
-                          : payment.status === 'PENDING'
-                            ? 'amber'
-                            : 'red'
-                      }
+                      tone={paymentTone[payment.status]}
                     />
                   </td>
                   <td className="p-3">
