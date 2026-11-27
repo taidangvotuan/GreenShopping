@@ -1,0 +1,43 @@
+# MySQL 8.4 RIÊNG cho kiểm thử (E2E) — tách hoàn toàn khỏi môi trường dev trong docker-compose.yml.
+#   Chạy:   docker compose -f docker-compose.test.yml up -d --wait
+#   Dừng:   docker compose -f docker-compose.test.yml down        (giữ dữ liệu)
+#   Xóa DB: docker compose -f docker-compose.test.yml down -v     (chỉ xóa volume test)
+#
+# Cách ly với dev:
+#   - Project riêng "greenshopping-test" (dev mặc định là "greenshopping") → container/network/volume không đụng nhau.
+#   - Cổng 127.0.0.1:3308 (dev dùng 127.0.0.1:3307; 3306 thường là MySQL cài sẵn trên máy).
+#   - Volume riêng mysql-test-data, database riêng greenshopping_test, mật khẩu riêng (MYSQL_TEST_*).
+name: greenshopping-test
+
+services:
+  mysql-test:
+    image: mysql:8.4
+    container_name: green-shopping-mysql-test
+    restart: "no"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_TEST_ROOT_PASSWORD:-root_test_pw}
+      MYSQL_DATABASE: greenshopping_test
+      # Tài khoản MIGRATION (DDL): entrypoint cấp ALL trên greenshopping_test.*
+      MYSQL_USER: green_test_migrate
+      MYSQL_PASSWORD: ${MYSQL_TEST_MIGRATE_PASSWORD:-green_test_migrate_pw}
+      TZ: Asia/Ho_Chi_Minh
+    command:
+      # Giống dev: utf8mb4 + lưu TIMESTAMP theo UTC
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+    ports:
+      # Chỉ loopback (VH-01)
+      - "127.0.0.1:3308:3306"
+    volumes:
+      - mysql-test-data:/var/lib/mysql
+      # Chạy MỘT LẦN khi volume còn trống: tạo user ứng dụng chỉ có DML (VH-01)
+      - ./docker/mysql/init-test:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_TEST_ROOT_PASSWORD:-root_test_pw}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  mysql-test-data:
