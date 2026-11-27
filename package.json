@@ -13,10 +13,13 @@
     "test": "npm run test:all",
     "test:unit": "npm run test:unit -w backend",
     "test:e2e": "npm run test:e2e -w backend",
+    "test:e2e:db": "npm run test:e2e:db -w backend",
     "test:all": "npm run test:all -w backend",
     "gen:api": "npm run gen:api -w frontend",
     "db:up": "docker compose up -d",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "db:test:up": "npm run db:test:up -w backend",
+    "db:test:down": "npm run db:test:down -w backend"
   },
   "repository": {
     "type": "git",

@@ -81,6 +81,8 @@ Tạo file `.env` cho backend từ file mẫu:
  
 ```powershell
 Copy-Item backend\.env.example backend\.env
+# File cấu hình E2E: trỏ tới MySQL test riêng (127.0.0.1:3308), chỉ chứa giá trị dành cho test
+Copy-Item backend\.env.test.example backend\.env.test
 ```
  
 Mở `backend\.env` và kiểm tra dòng kết nối DB:
@@ -163,11 +165,14 @@ npx -w backend prisma db seed
 
 > Mật khẩu băm bằng bcrypt. `PASSWORD_SALT` chỉ còn dùng để xác minh hash SHA-256 cũ (tự nâng cấp sang bcrypt khi đăng nhập) — không đổi giá trị này khi CSDL còn tài khoản cũ.
 
-Chạy E2E test cho Auth (cần MySQL đang chạy và đã migrate):
+Chạy kiểm thử. E2E dùng MySQL test **riêng** (`127.0.0.1:3308`, database `greenshopping_test`), không đụng DB dev:
 
 ```powershell
-npm run test:e2e -w backend -- auth
+npm test                               # unit + E2E: tự bật MySQL test, migrate deploy, rồi chạy E2E
+npm run test:e2e -w backend -- auth    # chỉ E2E đăng ký / đăng nhập (MySQL test phải đang chạy: npm run db:test:up)
 ```
+
+> E2E đọc `backend\.env.test` và **từ chối chạy** nếu `DATABASE_URL` hoặc `MIGRATION_DATABASE_URL` không trỏ tới database có tên kết thúc bằng `_test` (xem `backend\test\test-database-guard.ts`).
  
 ---
  
@@ -202,6 +207,7 @@ Tất cả chạy ở **thư mục gốc**.
 | `npm run dev` | Chạy frontend + backend |
 | `npm run db:up` | Bật MySQL + phpMyAdmin |
 | `npm run db:down` | Tắt container (giữ dữ liệu) |
+| `npm run db:test:up` / `npm run db:test:down` | Bật / tắt MySQL test riêng cho E2E (cổng `3308`) |
 | `docker compose down -v` | Tắt **và xóa toàn bộ dữ liệu DB** — cẩn thận |
  
 ### Cài thêm thư viện
@@ -221,7 +227,7 @@ npm i -D @types/bcrypt -w backend
 | `npx -w backend prisma generate` | Sau khi sửa bất kỳ file `*.prisma` nào |
 | `npx -w backend prisma migrate dev --name <ten>` | Sau khi sửa schema và muốn cập nhật DB. Ví dụ `--name add_shop_table` |
 | `npx -w backend prisma migrate dev` | Sau khi `git pull` có migration mới của người khác |
-| `npx -w backend prisma migrate reset` | Xóa sạch DB, chạy lại toàn bộ migration + seed |
+| `npx -w backend prisma migrate reset` | Xóa sạch DB, chạy lại toàn bộ migration. Prisma 7 **không** tự seed → chạy tiếp `npx -w backend prisma db seed` |
 | `npx -w backend prisma studio` | Mở giao diện xem/sửa dữ liệu trên trình duyệt |
  
 ### Tạo file NestJS mới

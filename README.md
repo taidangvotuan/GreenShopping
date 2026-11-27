@@ -23,6 +23,7 @@ Sàn thương mại điện tử dành cho sản phẩm xanh — monorepo **npm 
 ```bash
 npm install                                  # cài thư viện cho cả frontend + backend (một lần ở gốc)
 cp backend/.env.example backend/.env         # PowerShell: Copy-Item backend\.env.example backend\.env
+cp backend/.env.test.example backend/.env.test # cấu hình E2E: MySQL test riêng :3308, không phải DB dev
 npm run db:up                                # bật MySQL :3307 + phpMyAdmin :8080 (đợi ~30s lần đầu)
 npx -w backend prisma generate               # sinh Prisma Client
 npx -w backend prisma migrate dev            # tạo bảng
@@ -80,11 +81,18 @@ npm run start -w frontend            # phục vụ bản build ở cổng 3000
 |---|---|
 | `npm run typecheck -w frontend` | Kiểm tra kiểu TypeScript cho frontend |
 | `npm run lint -w backend` | Lint backend (oxlint) |
-| `npm test` / `npm run test:all` | Unit + E2E test backend (**E2E cần MySQL đang chạy**) |
+| `npm test` / `npm run test:all` | Unit + E2E backend; phần E2E tự bật MySQL test và `migrate deploy` trước khi chạy (**cần Docker**) |
 | `npm run test:unit` | Chỉ unit test backend (không cần MySQL) |
-| `npm run test:e2e -w backend` | E2E test backend (**cần MySQL đang chạy**) |
+| `npm run test:e2e:db` | Chỉ E2E: bật MySQL test → `migrate deploy` → chạy E2E |
+| `npm run test:e2e -w backend` | Chỉ chạy E2E (**MySQL test phải đang chạy**: `npm run db:test:up`) |
 | `npm run test:e2e -w backend -- auth` | Chỉ chạy E2E luồng đăng ký / đăng nhập |
 | `npm run gen:api` | Sinh lại kiểu API cho frontend từ Swagger (**cần backend đang chạy**) |
+
+> E2E chạy trên **MySQL test riêng** (`127.0.0.1:3308`, database `greenshopping_test`, xem
+> [docker-compose.test.yml](docker-compose.test.yml)) và đọc cấu hình từ `backend/.env.test`.
+> [backend/test/test-database-guard.ts](backend/test/test-database-guard.ts) **từ chối chạy** nếu `DATABASE_URL`
+> hoặc `MIGRATION_DATABASE_URL` không trỏ tới database có tên kết thúc bằng `_test`, nên test không bao giờ
+> ghi vào DB dev `green_shopping`. Chi tiết dựng DB test: [MIGRATE_E2E_LOG.md](MIGRATE_E2E_LOG.md).
 
 ## 6. Tài khoản mẫu (sau khi seed với `SEED_DEMO=true`, chỉ dùng trên máy phát triển)
 
@@ -101,6 +109,7 @@ npm run start -w frontend            # phục vụ bản build ở cổng 3000
 |---|---|
 | `npm run db:up` | Bật MySQL + phpMyAdmin |
 | `npm run db:down` | Tắt container (giữ dữ liệu) |
+| `npm run db:test:up` / `npm run db:test:down` | Bật / tắt MySQL test riêng cho E2E (cổng `3308`; tắt vẫn giữ dữ liệu) |
 | `docker compose down -v` | Tắt và **xóa toàn bộ dữ liệu** DB |
-| `npx -w backend prisma migrate reset` | Xóa sạch DB, chạy lại migration + seed |
+| `npx -w backend prisma migrate reset` | Xóa sạch DB, chạy lại toàn bộ migration. Prisma 7 **không** tự seed → chạy tiếp `npx -w backend prisma db seed` |
 | `npx -w backend prisma studio` | Giao diện xem/sửa dữ liệu trên trình duyệt |
